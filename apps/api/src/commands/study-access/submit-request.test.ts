@@ -3,111 +3,24 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { workflowEventTypes } from "@accessflow/workflow";
 
-import {
-  createDraft,
-  saveDraft,
-  submitRequest
-} from "./study-access";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 import {
   idempotencyKeys,
   studyAccessAuditEvents,
-  studyAccessRequestDrafts,
   studyAccessRequests
-} from "../db/schema";
+} from "../../db/schema";
 import {
   createTestActor,
   createTestStudy,
   resetDatabase
-} from "../test-helpers/db";
+} from "../../test-helpers/db";
+import { createDraft } from "./create-draft";
+import { submitRequest } from "./submit-request";
+import { validSubmission } from "./test-data";
 
-const validSubmission = {
-  purpose: "Analyze synthetic outcomes for workspace access.",
-  requestedRole: "analyst",
-  justification: "Requester needs aggregate synthetic study data.",
-  affiliation: "AccessFlow Research"
-} as const;
-
-describe("study access request commands", () => {
+describe("submitRequest", () => {
   beforeEach(async () => {
     await resetDatabase();
-  });
-
-  it("lets a requester create an incomplete draft", async () => {
-    const actor = await createTestActor();
-    const study = await createTestStudy();
-
-    const result = await createDraft(actor, { studyId: study.id });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-
-    const [request] = await db
-      .select()
-      .from(studyAccessRequests)
-      .where(eq(studyAccessRequests.id, result.value.requestId))
-      .limit(1);
-    const [draft] = await db
-      .select()
-      .from(studyAccessRequestDrafts)
-      .where(eq(studyAccessRequestDrafts.id, result.value.draftId))
-      .limit(1);
-
-    expect(request?.status).toBe("draft");
-    expect(request?.requestedRole).toBeNull();
-    expect(draft?.ownerId).toBe(actor.id);
-  });
-
-  it("lets a requester save their own draft", async () => {
-    const actor = await createTestActor();
-    const study = await createTestStudy();
-    const created = await createDraft(actor, { studyId: study.id });
-
-    if (!created.ok) {
-      throw new Error(created.error.message);
-    }
-
-    const result = await saveDraft(actor, {
-      draftId: created.value.draftId,
-      purpose: "Need temporary synthetic workspace access.",
-      requestedRole: "viewer"
-    });
-
-    expect(result).toEqual({
-      ok: true,
-      value: expect.objectContaining({
-        draftId: created.value.draftId,
-        requestId: created.value.requestId,
-        status: "draft",
-        draft: expect.objectContaining({
-          purpose: "Need temporary synthetic workspace access.",
-          requestedRole: "viewer"
-        })
-      })
-    });
-  });
-
-  it("does not let a requester save another requester's draft", async () => {
-    const owner = await createTestActor("requester", "owner@example.test");
-    const other = await createTestActor("requester", "other@example.test");
-    const study = await createTestStudy();
-    const created = await createDraft(owner, { studyId: study.id });
-
-    if (!created.ok) {
-      throw new Error(created.error.message);
-    }
-
-    const result = await saveDraft(other, {
-      draftId: created.value.draftId,
-      purpose: "Attempted update"
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("Forbidden");
-    }
   });
 
   it("returns validation errors when submit fields are incomplete", async () => {
@@ -412,36 +325,6 @@ describe("study access request commands", () => {
       );
 
     expect(pendingLoserCount?.value).toBe(0);
-  });
-
-  it("does not let a requester save a submitted draft", async () => {
-    const actor = await createTestActor();
-    const study = await createTestStudy();
-    const created = await createDraft(actor, { studyId: study.id });
-
-    if (!created.ok) {
-      throw new Error(created.error.message);
-    }
-
-    const submitted = await submitRequest(actor, {
-      draftId: created.value.draftId,
-      idempotencyKey: "submit-before-save-1",
-      ...validSubmission
-    });
-
-    if (!submitted.ok) {
-      throw new Error(submitted.error.message);
-    }
-
-    const result = await saveDraft(actor, {
-      draftId: created.value.draftId,
-      purpose: "Attempted post-submit edit"
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("InvalidTransition");
-    }
   });
 
   it("keeps persisted audit event types aligned with workflow vocabulary", async () => {
