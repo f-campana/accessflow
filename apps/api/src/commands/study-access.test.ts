@@ -139,6 +139,19 @@ describe("study access request commands", () => {
         })
       );
     }
+
+    const [idempotencyCount] = await db
+      .select({ value: count() })
+      .from(idempotencyKeys)
+      .where(
+        and(
+          eq(idempotencyKeys.actorId, actor.id),
+          eq(idempotencyKeys.commandName, "submitRequest"),
+          eq(idempotencyKeys.key, "submit-invalid-1")
+        )
+      );
+
+    expect(idempotencyCount?.value).toBe(0);
   });
 
   it("submits a valid draft with one audit event and completed idempotency", async () => {
@@ -224,6 +237,53 @@ describe("study access request commands", () => {
     expect(auditCount?.value).toBe(1);
   });
 
+  it("handles concurrent same-key submit retries as one durable result", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const input = {
+      draftId: created.value.draftId,
+      idempotencyKey: "submit-concurrent-replay-1",
+      ...validSubmission
+    };
+
+    const [first, second] = await Promise.all([
+      submitRequest(actor, input),
+      submitRequest(actor, input)
+    ]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(second).toEqual(first);
+
+    if (!first.ok) {
+      return;
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, first.value.requestId));
+    const [idempotencyCount] = await db
+      .select({ value: count() })
+      .from(idempotencyKeys)
+      .where(
+        and(
+          eq(idempotencyKeys.actorId, actor.id),
+          eq(idempotencyKeys.commandName, "submitRequest"),
+          eq(idempotencyKeys.key, "submit-concurrent-replay-1")
+        )
+      );
+
+    expect(auditCount?.value).toBe(1);
+    expect(idempotencyCount?.value).toBe(1);
+  });
+
   it("rejects idempotency key reuse with a different payload", async () => {
     const actor = await createTestActor();
     const study = await createTestStudy();
@@ -257,6 +317,130 @@ describe("study access request commands", () => {
         .from(studyAccessAuditEvents)
         .where(eq(studyAccessAuditEvents.requestId, first.value.requestId));
       expect(auditCount?.value).toBe(1);
+    }
+  });
+
+  it("handles concurrent same-key different-payload submit attempts as a typed conflict", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const [first, second] = await Promise.all([
+      submitRequest(actor, {
+        draftId: created.value.draftId,
+        idempotencyKey: "submit-concurrent-conflict-1",
+        ...validSubmission
+      }),
+      submitRequest(actor, {
+        draftId: created.value.draftId,
+        idempotencyKey: "submit-concurrent-conflict-1",
+        ...validSubmission,
+        purpose: "Different concurrent payload"
+      })
+    ]);
+
+    const results = [first, second];
+    const successes = results.filter((result) => result.ok);
+    const failures = results.filter((result) => !result.ok);
+
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.ok).toBe(false);
+    if (failures[0] && !failures[0].ok) {
+      expect(failures[0].error.code).toBe("IdempotencyConflict");
+    }
+
+    const success = successes[0];
+    if (!success?.ok) {
+      return;
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, success.value.requestId));
+
+    expect(auditCount?.value).toBe(1);
+  });
+
+  it("does not keep pending idempotency when a concurrent different-key submit loses the draft transition", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const [first, second] = await Promise.all([
+      submitRequest(actor, {
+        draftId: created.value.draftId,
+        idempotencyKey: "submit-concurrent-winner-1",
+        ...validSubmission
+      }),
+      submitRequest(actor, {
+        draftId: created.value.draftId,
+        idempotencyKey: "submit-concurrent-loser-1",
+        ...validSubmission
+      })
+    ]);
+
+    const results = [first, second];
+    const successes = results.filter((result) => result.ok);
+    const failures = results.filter((result) => !result.ok);
+
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.ok).toBe(false);
+    if (failures[0] && !failures[0].ok) {
+      expect(failures[0].error.code).toBe("InvalidTransition");
+    }
+
+    const [pendingLoserCount] = await db
+      .select({ value: count() })
+      .from(idempotencyKeys)
+      .where(
+        and(
+          eq(idempotencyKeys.actorId, actor.id),
+          eq(idempotencyKeys.commandName, "submitRequest"),
+          eq(idempotencyKeys.key, "submit-concurrent-loser-1")
+        )
+      );
+
+    expect(pendingLoserCount?.value).toBe(0);
+  });
+
+  it("does not let a requester save a submitted draft", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const submitted = await submitRequest(actor, {
+      draftId: created.value.draftId,
+      idempotencyKey: "submit-before-save-1",
+      ...validSubmission
+    });
+
+    if (!submitted.ok) {
+      throw new Error(submitted.error.message);
+    }
+
+    const result = await saveDraft(actor, {
+      draftId: created.value.draftId,
+      purpose: "Attempted post-submit edit"
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("InvalidTransition");
     }
   });
 

@@ -5,8 +5,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
     },
     "./router": {
       "types": "./src/router.ts",

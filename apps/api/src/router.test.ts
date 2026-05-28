@@ -12,14 +12,36 @@ const unauthenticatedContext = {
 } as RequestContext;
 
 describe("tRPC auth boundary", () => {
-  it.each(["createDraft", "saveDraft", "submitRequest"] as const)(
-    "requires auth for %s",
-    async (procedure) => {
-      const caller = appRouter.createCaller(unauthenticatedContext);
+  it("requires auth for createDraft", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
 
-      await expect(caller[procedure]({})).rejects.toMatchObject({
-        code: "UNAUTHORIZED"
-      } satisfies Partial<TRPCError>);
-    }
-  );
+    await expect(
+      caller.createDraft({ studyId: crypto.randomUUID() })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("requires auth for saveDraft", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(
+      caller.saveDraft({ draftId: crypto.randomUUID() })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("requires auth for submitRequest", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(
+      caller.submitRequest({
+        draftId: crypto.randomUUID(),
+        idempotencyKey: "unauthenticated-submit"
+      })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
 });

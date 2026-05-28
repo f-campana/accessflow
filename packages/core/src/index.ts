@@ -94,8 +94,10 @@ export const fromZod = <T>(result: ZodSafeParseResult<T>): Result<T> => {
 
   return err(
     validationError("Validation failed", {
-      fieldErrors,
-      formErrors: flattened.formErrors
+      ...(Object.keys(fieldErrors).length > 0 ? { fieldErrors } : {}),
+      ...(flattened.formErrors.length > 0
+        ? { formErrors: flattened.formErrors }
+        : {})
     })
   );
 };

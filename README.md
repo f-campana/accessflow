@@ -6,7 +6,7 @@ It is not a compliance platform, clinical data system, generic form library, or 
 
 ## Current Status
 
-The repo currently contains the project brief and an initial monorepo scaffold:
+The repo contains the project brief, collaboration guardrails, and the first backend command-boundary slice:
 
 ```text
 apps/web
@@ -15,7 +15,19 @@ packages/core
 packages/workflow
 ```
 
-The next implementation work should focus on the first backend command-boundary slice: real auth/session shape, corrected draft/request persistence semantics, idempotency replay, typed command errors, and transactional audit writes for `createDraft`, `saveDraft`, and `submitRequest`.
+Implemented API coverage:
+
+- Better Auth local email/password session path.
+- Drizzle/Postgres schema and migrations inside `apps/api`.
+- `createDraft`, `saveDraft`, and `submitRequest` command services.
+- tRPC mutations for those commands.
+- Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
+
+Current focus:
+
+- Keep hardening backend correctness before building workflow UI.
+- Treat transaction rollback, idempotency concurrency, and draft-vs-submit races as higher priority than UI surface area.
+- Do not build reviewer/admin flows until the requester submit path is reliable under failure and retry.
 
 ## Read First
 
@@ -39,8 +51,10 @@ pnpm install
 Start Postgres:
 
 ```bash
-docker compose up -d postgres
+docker-compose up -d postgres
 ```
+
+If your Docker installation supports the newer plugin syntax, `docker compose up -d postgres` is equivalent.
 
 Run migrations:
 

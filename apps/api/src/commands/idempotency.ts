@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -10,10 +9,6 @@ import {
   unexpected,
   type Result
 } from "@accessflow/core";
-
-import type { AuthenticatedActor } from "../context";
-import { idempotencyKeys } from "../db/schema";
-import type { CommandDependencies } from "./types";
 
 type JsonValue =
   | string
@@ -66,30 +61,16 @@ export const idempotencyReplaySchema = <T extends z.ZodType>(
     draft: payloadSchema
   });
 
-export const resolveCompletedIdempotency = async <T>(
-  dependencies: CommandDependencies,
-  actor: AuthenticatedActor,
+export const resolveIdempotencyReplay = <T>(
   commandName: string,
-  key: string,
   payloadHash: string,
+  existing: {
+    payloadHash: string;
+    status: "pending" | "completed" | "failed";
+    responsePayload: unknown;
+  },
   responseSchema: z.ZodType<T>
-): Promise<Result<T> | null> => {
-  const [existing] = await dependencies.db
-    .select()
-    .from(idempotencyKeys)
-    .where(
-      and(
-        eq(idempotencyKeys.actorId, actor.id),
-        eq(idempotencyKeys.commandName, commandName),
-        eq(idempotencyKeys.key, key)
-      )
-    )
-    .limit(1);
-
-  if (!existing) {
-    return null;
-  }
-
+): Result<T> => {
   if (existing.payloadHash !== payloadHash) {
     return err(idempotencyConflict());
   }
@@ -105,28 +86,4 @@ export const resolveCompletedIdempotency = async <T>(
   }
 
   return { ok: true, value: parsed.data };
-};
-
-export const insertPendingIdempotency = async (
-  dependencies: CommandDependencies,
-  actor: AuthenticatedActor,
-  commandName: string,
-  key: string,
-  payloadHash: string
-) => {
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-
-  const [created] = await dependencies.db
-    .insert(idempotencyKeys)
-    .values({
-      actorId: actor.id,
-      commandName,
-      key,
-      payloadHash,
-      status: "pending",
-      expiresAt
-    })
-    .returning({ id: idempotencyKeys.id });
-
-  return created;
 };

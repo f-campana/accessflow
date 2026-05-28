@@ -1,11 +1,14 @@
 import { toCommandResponse } from "@accessflow/core";
-import { z } from "zod";
-
 import {
   createDraft,
   saveDraft,
   submitRequest
 } from "./commands/study-access";
+import {
+  createDraftInputSchema,
+  saveDraftInputSchema,
+  submitRequestInputSchema
+} from "./commands/validation";
 import { authenticatedProcedure, publicProcedure, router } from "./trpc";
 
 export const appRouter = router({
@@ -14,17 +17,17 @@ export const appRouter = router({
     service: "accessflow-api"
   })),
   createDraft: authenticatedProcedure
-    .input(z.unknown())
+    .input(createDraftInputSchema)
     .mutation(async ({ ctx, input }) =>
       toCommandResponse(await createDraft(ctx.actor, input))
     ),
   saveDraft: authenticatedProcedure
-    .input(z.unknown())
+    .input(saveDraftInputSchema)
     .mutation(async ({ ctx, input }) =>
       toCommandResponse(await saveDraft(ctx.actor, input))
     ),
   submitRequest: authenticatedProcedure
-    .input(z.unknown())
+    .input(submitRequestInputSchema)
     .mutation(async ({ ctx, input }) =>
       toCommandResponse(await submitRequest(ctx.actor, input))
     )
