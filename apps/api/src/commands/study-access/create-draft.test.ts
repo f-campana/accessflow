@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db/client";
 import {
@@ -15,6 +15,10 @@ import { createDraft } from "./create-draft";
 
 describe("createDraft", () => {
   beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterAll(async () => {
     await resetDatabase();
   });
 

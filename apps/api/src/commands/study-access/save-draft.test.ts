@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
   createTestActor,
@@ -12,6 +12,10 @@ import { validSubmission } from "./test-data";
 
 describe("saveDraft", () => {
   beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterAll(async () => {
     await resetDatabase();
   });
 

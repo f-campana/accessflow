@@ -16,6 +16,7 @@ describe("api server", () => {
   });
 
   afterAll(async () => {
+    await resetDatabase();
     await server.close();
   });
 

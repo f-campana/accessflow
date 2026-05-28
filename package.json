@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @accessflow/api --filter @accessflow/web dev",
+    "mobile:preview": "node scripts/mobile-preview.mjs",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test"

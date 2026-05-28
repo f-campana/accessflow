@@ -3,10 +3,24 @@ import { sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { studies, users, type appRoleValues } from "../db/schema";
 import type { AuthenticatedActor } from "../context";
+import { env } from "../env";
 
 type ActorRole = (typeof appRoleValues)[number];
 
+const currentDatabaseName = () => {
+  const parsedUrl = new URL(env.DATABASE_URL);
+  return parsedUrl.pathname.replace(/^\//, "");
+};
+
 export const resetDatabase = async () => {
+  const databaseName = currentDatabaseName();
+
+  if (env.NODE_ENV !== "test" || !databaseName.includes("test")) {
+    throw new Error(
+      `Refusing to reset non-test database "${databaseName}" with NODE_ENV="${env.NODE_ENV}"`
+    );
+  }
+
   await db.execute(sql`
     TRUNCATE TABLE
       "accounts",

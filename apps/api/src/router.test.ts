@@ -1,8 +1,14 @@
 import { TRPCError } from "@trpc/server";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { appRouter } from "./router";
 import type { RequestContext } from "./context";
+import {
+  createTestActor,
+  createTestStudy,
+  resetDatabase
+} from "./test-helpers/db";
+import { createDraft, submitRequest } from "./commands/study-access";
 
 const unauthenticatedContext = {
   actor: null,
@@ -12,6 +18,98 @@ const unauthenticatedContext = {
 } as RequestContext;
 
 describe("tRPC auth boundary", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterAll(async () => {
+    await resetDatabase();
+  });
+
+  it("returns the current actor when authenticated", async () => {
+    const actor = await createTestActor();
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor
+    });
+
+    await expect(caller.me()).resolves.toEqual(actor);
+  });
+
+  it("returns null for me when unauthenticated", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(caller.me()).resolves.toBeNull();
+  });
+
+  it("requires auth for studies", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(caller.studies()).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("lists seeded study workspaces for authenticated users", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor
+    });
+
+    await expect(caller.studies()).resolves.toEqual([
+      expect.objectContaining({ id: study.id })
+    ]);
+  });
+
+  it("returns the requester's current request and persisted timeline", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const submitted = await submitRequest(actor, {
+      draftId: created.value.draftId,
+      idempotencyKey: "router-submit-1",
+      purpose: "Review aggregate synthetic outcomes.",
+      requestedRole: "analyst",
+      justification: "Requester needs access for aggregate analysis.",
+      affiliation: "AccessFlow Research"
+    });
+
+    if (!submitted.ok) {
+      throw new Error(submitted.error.message);
+    }
+
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor
+    });
+
+    await expect(
+      caller.myStudyAccess({ studyId: study.id })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.value.requestId,
+          status: "submitted"
+        }),
+        auditEvents: [
+          expect.objectContaining({
+            id: submitted.value.auditEventId,
+            eventType: "submitRequest",
+            fromStatus: "draft",
+            toStatus: "submitted"
+          })
+        ]
+      })
+    );
+  });
+
   it("requires auth for createDraft", async () => {
     const caller = appRouter.createCaller(unauthenticatedContext);
 

@@ -1,5 +1,5 @@
 import { and, count, eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { workflowEventTypes } from "@accessflow/workflow";
 
@@ -20,6 +20,10 @@ import { validSubmission } from "./test-data";
 
 describe("submitRequest", () => {
   beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterAll(async () => {
     await resetDatabase();
   });
 

@@ -17,9 +17,10 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests --no-file-parallelism",
+    "test": "tsx src/test-helpers/run-tests.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@accessflow/core": "workspace:*",

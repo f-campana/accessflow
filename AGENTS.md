@@ -8,7 +8,8 @@ Read these files before making non-trivial changes:
 
 1. `README.md`
 2. `docs/00-product/accessflow-workflow-brief.md`
-3. This `AGENTS.md`
+3. `docs/30-quality/repo-quality-gate.md`
+4. This `AGENTS.md`
 
 The central product invariant is:
 
@@ -83,6 +84,14 @@ pnpm test
 git diff --check
 ```
 
+For any user-visible web change, also run a real rendered smoke check before reporting completion. Use at least one of:
+
+- Browser tool against `pnpm mobile:preview`
+- Playwright/browser automation at desktop and mobile widths
+- iOS Simulator only when explicitly validating Safari/iPhone behavior
+
+The smoke check should cover the affected workflow, not only page load. For the requester path, verify sign-up/sign-in, seeded study visibility, draft creation, submission, persisted audit event rendering, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
+
 If dependencies change:
 
 ```text
@@ -103,6 +112,8 @@ pnpm --filter @accessflow/api db:migrate
 ```
 
 Report clearly if Docker/Postgres is unavailable.
+
+API tests use an isolated `accessflow_test` database by default. Do not bypass `pnpm --filter @accessflow/api test` with direct Vitest commands unless you intentionally provide a safe test `DATABASE_URL`.
 
 ## Git And Coordination
 

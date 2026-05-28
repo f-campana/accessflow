@@ -6,7 +6,7 @@ It is not a compliance platform, clinical data system, generic form library, or 
 
 ## Current Status
 
-The repo contains the project brief, collaboration guardrails, and the first backend command-boundary slice:
+The repo contains the project brief, collaboration guardrails, backend command boundary, and the first requester-facing workflow UI:
 
 ```text
 apps/web
@@ -21,18 +21,25 @@ Implemented API coverage:
 - Drizzle/Postgres schema and migrations inside `apps/api`.
 - `createDraft`, `saveDraft`, and `submitRequest` command services.
 - tRPC mutations for those commands.
+- tRPC reads for the current actor, study list, and requester study access state.
 - Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
+
+Implemented web coverage:
+
+- Real local sign-up/sign-in through the API auth path.
+- Study entry point backed by seeded Postgres data.
+- Draft creation, draft saving, submission, typed error rendering, persisted status, and audit timeline.
 
 Current focus:
 
-- Keep hardening backend correctness before building workflow UI.
-- Treat transaction rollback, idempotency concurrency, and draft-vs-submit races as higher priority than UI surface area.
+- Keep the requester lifecycle honest end to end before expanding product surface area.
 - Do not build reviewer/admin flows until the requester submit path is reliable under failure and retry.
 
 ## Read First
 
 1. `docs/00-product/accessflow-workflow-brief.md`
-2. `AGENTS.md`
+2. `docs/30-quality/repo-quality-gate.md`
+3. `AGENTS.md`
 
 The core invariant is:
 
@@ -62,6 +69,12 @@ Run migrations:
 pnpm --filter @accessflow/api db:migrate
 ```
 
+Seed the synthetic study workspace:
+
+```bash
+pnpm --filter @accessflow/api db:seed
+```
+
 Run development servers:
 
 ```bash
@@ -75,6 +88,16 @@ web: http://localhost:3000
 api: http://localhost:4000
 ```
 
+For phone testing on the local network, use the production-style preview:
+
+```bash
+pnpm mobile:preview
+```
+
+That command starts Postgres, applies API migrations, seeds the synthetic study workspace, builds the web app, and prints the LAN URL to open on a phone.
+
+For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover sign-up, seeded study visibility, draft creation, submission, persisted audit timeline, readable auth errors, and no horizontal overflow at phone width.
+
 ## Verification
 
 Run:
@@ -85,6 +108,10 @@ pnpm typecheck
 pnpm test
 git diff --check
 ```
+
+The API test runner uses an isolated `accessflow_test` database by default so verification cannot truncate the active development or mobile-preview database. To override the test database URL, set `ACCESSFLOW_TEST_DATABASE_URL`.
+
+See `docs/30-quality/repo-quality-gate.md` for the full pass-closing standard.
 
 ## Boundaries
 
