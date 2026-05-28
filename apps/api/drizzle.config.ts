@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      "postgres://accessflow:accessflow@localhost:5432/accessflow"
+      "postgres://accessflow:accessflow@localhost:55433/accessflow"
   }
 });

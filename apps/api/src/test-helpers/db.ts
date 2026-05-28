@@ -1,0 +1,62 @@
+import { sql } from "drizzle-orm";
+
+import { db } from "../db/client";
+import { studies, users, type appRoleValues } from "../db/schema";
+import type { AuthenticatedActor } from "../context";
+
+type ActorRole = (typeof appRoleValues)[number];
+
+export const resetDatabase = async () => {
+  await db.execute(sql`
+    TRUNCATE TABLE
+      "accounts",
+      "idempotency_keys",
+      "sessions",
+      "study_access_audit_events",
+      "study_access_request_drafts",
+      "study_access_requests",
+      "studies",
+      "users",
+      "verifications"
+    RESTART IDENTITY CASCADE
+  `);
+};
+
+export const createTestActor = async (
+  role: ActorRole = "requester",
+  email = `${role}-${crypto.randomUUID()}@example.test`
+): Promise<AuthenticatedActor> => {
+  const actor = {
+    id: crypto.randomUUID(),
+    email,
+    role
+  };
+
+  await db.insert(users).values({
+    id: actor.id,
+    name: email,
+    email: actor.email,
+    emailVerified: true,
+    role: actor.role
+  });
+
+  return actor;
+};
+
+export const createTestStudy = async () => {
+  const [study] = await db
+    .insert(studies)
+    .values({
+      slug: `study-${crypto.randomUUID()}`,
+      displayName: "Synthetic Study",
+      shortDescription: "Synthetic workspace used by command tests.",
+      sensitivityLabel: "Synthetic"
+    })
+    .returning({ id: studies.id });
+
+  if (!study) {
+    throw new Error("Failed to create test study");
+  }
+
+  return study;
+};

@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   allowedWorkflowTransitionsFrom,
   isWorkflowTransitionAllowed,
+  studyAccessRequestStatuses,
   transitionWorkflowStatus,
+  workflowEventTypes,
+  workflowTransitions,
   type StudyAccessRequestStatus,
   type WorkflowEventType
 } from ".";
@@ -13,22 +16,15 @@ const allowedTransitions: Array<{
   eventType: WorkflowEventType;
   to: StudyAccessRequestStatus;
 }> = [
-  { from: "draft", eventType: "submitRequest", to: "submitted" },
-  { from: "submitted", eventType: "startReview", to: "under_review" },
-  { from: "submitted", eventType: "withdrawRequest", to: "withdrawn" },
-  { from: "under_review", eventType: "approveRequest", to: "approved" },
-  { from: "under_review", eventType: "rejectRequest", to: "rejected" },
-  { from: "rejected", eventType: "reviseRejectedRequest", to: "draft" },
-  { from: "approved", eventType: "revokeAccess", to: "revoked" }
+  { from: "draft", eventType: "submitRequest", to: "submitted" }
 ];
 
 const rejectedTransitions: Array<{
   from: StudyAccessRequestStatus;
   eventType: WorkflowEventType;
 }> = [
-  { from: "draft", eventType: "approveRequest" },
-  { from: "submitted", eventType: "approveRequest" },
-  { from: "under_review", eventType: "withdrawRequest" },
+  { from: "submitted", eventType: "submitRequest" },
+  { from: "under_review", eventType: "submitRequest" },
   { from: "withdrawn", eventType: "submitRequest" },
   { from: "revoked", eventType: "submitRequest" }
 ];
@@ -59,17 +55,25 @@ describe("study access workflow transitions", () => {
   );
 
   it("returns only allowed transitions for a status", () => {
-    expect(allowedWorkflowTransitionsFrom("submitted")).toEqual([
+    expect(allowedWorkflowTransitionsFrom("draft")).toEqual([
       {
-        eventType: "startReview",
-        from: "submitted",
-        to: "under_review"
-      },
-      {
-        eventType: "withdrawRequest",
-        from: "submitted",
-        to: "withdrawn"
+        eventType: "submitRequest",
+        from: "draft",
+        to: "submitted"
       }
     ]);
+    expect(allowedWorkflowTransitionsFrom("submitted")).toEqual([]);
+  });
+
+  it("keeps configured transitions aligned with status and event vocabularies", () => {
+    const statuses = new Set<string>(studyAccessRequestStatuses);
+    const events = new Set<string>(workflowEventTypes);
+
+    expect(workflowEventTypes).toEqual(["submitRequest"]);
+    for (const transition of workflowTransitions) {
+      expect(events.has(transition.eventType)).toBe(true);
+      expect(statuses.has(transition.from)).toBe(true);
+      expect(statuses.has(transition.to)).toBe(true);
+    }
   });
 });

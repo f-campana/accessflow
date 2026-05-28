@@ -17,15 +17,17 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --no-file-parallelism",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@accessflow/core": "workspace:*",
     "@accessflow/workflow": "workspace:*",
+    "@better-auth/drizzle-adapter": "^1.6.11",
     "@fastify/cors": "^11.2.0",
     "@trpc/server": "^11.17.0",
+    "better-auth": "^1.6.11",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",

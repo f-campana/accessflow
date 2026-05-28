@@ -14,15 +14,7 @@ export const studyAccessRequestStatuses = [
 export type StudyAccessRequestStatus =
   (typeof studyAccessRequestStatuses)[number];
 
-export const workflowEventTypes = [
-  "submitRequest",
-  "startReview",
-  "approveRequest",
-  "rejectRequest",
-  "withdrawRequest",
-  "reviseRejectedRequest",
-  "revokeAccess"
-] as const;
+export const workflowEventTypes = ["submitRequest"] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];
 
@@ -35,6 +27,14 @@ export type WorkflowTransition = {
   from: StudyAccessRequestStatus;
   to: StudyAccessRequestStatus;
 };
+
+export const workflowTransitions = [
+  {
+    eventType: "submitRequest",
+    from: "draft",
+    to: "submitted"
+  }
+] as const satisfies readonly WorkflowTransition[];
 
 export const studyAccessWorkflowMachine = createMachine({
   types: {} as {
@@ -49,27 +49,11 @@ export const studyAccessWorkflowMachine = createMachine({
       }
     },
     submitted: {
-      on: {
-        startReview: "under_review",
-        withdrawRequest: "withdrawn"
-      }
+      on: {}
     },
-    under_review: {
-      on: {
-        approveRequest: "approved",
-        rejectRequest: "rejected"
-      }
-    },
-    approved: {
-      on: {
-        revokeAccess: "revoked"
-      }
-    },
-    rejected: {
-      on: {
-        reviseRejectedRequest: "draft"
-      }
-    },
+    under_review: {},
+    approved: {},
+    rejected: {},
     withdrawn: {},
     revoked: {}
   }
@@ -89,19 +73,30 @@ export const transitionWorkflowStatus = (
   from: StudyAccessRequestStatus,
   eventType: WorkflowEventType
 ): Result<WorkflowTransition> => {
+  const configuredTransition = workflowTransitions.find(
+    (transition) =>
+      transition.from === from && transition.eventType === eventType
+  );
+
+  if (!configuredTransition) {
+    return err(
+      invalidTransition(`Cannot apply ${eventType} while request is ${from}`)
+    );
+  }
+
   const currentSnapshot = snapshotForStatus(from);
   const nextSnapshot = getNextSnapshot(studyAccessWorkflowMachine, currentSnapshot, {
     type: eventType
   });
   const to = nextSnapshot.value as StudyAccessRequestStatus;
 
-  if (to === from) {
+  if (to !== configuredTransition.to) {
     return err(
       invalidTransition(`Cannot apply ${eventType} while request is ${from}`)
     );
   }
 
-  return ok({ eventType, from, to });
+  return ok(configuredTransition);
 };
 
 export const isWorkflowTransitionAllowed = (
@@ -112,8 +107,4 @@ export const isWorkflowTransitionAllowed = (
 export const allowedWorkflowTransitionsFrom = (
   from: StudyAccessRequestStatus
 ): WorkflowTransition[] =>
-  workflowEventTypes.flatMap((eventType) => {
-    const result = transitionWorkflowStatus(from, eventType);
-
-    return result.ok ? [result.value] : [];
-  });
+  workflowTransitions.filter((transition) => transition.from === from);

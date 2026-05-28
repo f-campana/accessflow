@@ -29,25 +29,27 @@ export type FieldErrors = Record<string, string[]>;
 export type AppError = {
   code: AppErrorCode;
   message: string;
+  formErrors?: string[];
   fieldErrors?: FieldErrors;
 };
 
 export const appError = (
   code: AppErrorCode,
   message: string,
-  options: { fieldErrors?: FieldErrors } = {}
+  options: { formErrors?: string[]; fieldErrors?: FieldErrors } = {}
 ): AppError => ({
   code,
   message,
+  ...(options.formErrors?.length ? { formErrors: options.formErrors } : {}),
   ...(options.fieldErrors ? { fieldErrors: options.fieldErrors } : {})
 });
 
 export const validationError = (
   message = "Validation failed",
-  fieldErrors?: FieldErrors
+  options: { formErrors?: string[]; fieldErrors?: FieldErrors } = {}
 ): AppError =>
-  fieldErrors
-    ? appError("ValidationError", message, { fieldErrors })
+  options.formErrors?.length || options.fieldErrors
+    ? appError("ValidationError", message, options)
     : appError("ValidationError", message);
 
 export const unauthorized = (message = "Authentication required"): AppError =>
@@ -82,18 +84,28 @@ export const fromZod = <T>(result: ZodSafeParseResult<T>): Result<T> => {
   }
 
   const fieldErrors: FieldErrors = {};
+  const flattened = result.error.flatten();
 
-  for (const [field, messages] of Object.entries(
-    result.error.flatten().fieldErrors
-  )) {
+  for (const [field, messages] of Object.entries(flattened.fieldErrors)) {
     if (Array.isArray(messages) && messages.length > 0) {
       fieldErrors[field] = messages;
     }
   }
 
-  return err(validationError("Validation failed", fieldErrors));
+  return err(
+    validationError("Validation failed", {
+      fieldErrors,
+      formErrors: flattened.formErrors
+    })
+  );
 };
 
 export const assertNever = (value: never, message = "Unexpected value"): never => {
   throw new Error(`${message}: ${String(value)}`);
 };
+
+export type CommandResponse<T, E = AppError> = Result<T, E>;
+
+export const toCommandResponse = <T, E>(
+  result: Result<T, E>
+): CommandResponse<T, E> => result;

@@ -25,4 +25,21 @@ describe("Result helpers", () => {
       expect(result.error.fieldErrors?.email).toHaveLength(1);
     }
   });
+
+  it("keeps form-level Zod errors", () => {
+    const schema = z
+      .object({
+        first: z.string(),
+        second: z.string()
+      })
+      .refine((value) => value.first !== value.second, {
+        message: "Values must be different"
+      });
+    const result = fromZod(schema.safeParse({ first: "same", second: "same" }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.formErrors).toEqual(["Values must be different"]);
+    }
+  });
 });
