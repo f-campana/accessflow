@@ -6,6 +6,14 @@ AccessFlow is a full-stack workflow case study for clinical study workspace acce
 
 The product scenario is intentionally small: requesters ask for access to a synthetic clinical study workspace, reviewers decide whether access should be granted, and the system records every durable transition. The goal is not to build another frontend showcase or a generic form library. The goal is to practice truthful workflow engineering across authentication, authorization, typed commands, persistence, idempotency, state transitions, audit events, and typed errors.
 
+This document describes the product spine and roadmap. It is not a claim that every role and command is implemented today. The current implementation is intentionally narrower:
+
+```text
+implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, submit audit timeline
+next hardening: requester reliability, accessibility, docs, and quality gates from docs/40-review/requester-workflow-hardening-todo.md
+roadmap later: reviewer inbox, startReview, approveRequest, rejectRequest, withdrawRequest, revokeAccess, admin inspection
+```
+
 The core command path is:
 
 ```text
@@ -34,13 +42,13 @@ Conform is deferred. Forms in v1 use plain React and HTML controls with Zod vali
 
 ## 3. Personas
 
-The first release has three roles.
+The target product has three roles. The current code implements only the requester-facing slice.
 
-Requester: creates and updates their own access request drafts, submits requests, withdraws submitted requests, and views the status and audit timeline for their own requests.
+Requester: implemented for creating and updating their own access request drafts, submitting requests, and viewing the status and audit timeline for their own requests. Withdrawing a submitted request is roadmap.
 
-Reviewer: sees submitted access requests, starts review, approves or rejects under-review requests, and provides decision notes where required. A reviewer should not be able to edit the requester-owned form payload directly.
+Reviewer: roadmap. Reviewers will see submitted access requests, start review, approve or reject under-review requests, and provide decision notes where required. A reviewer should not be able to edit the requester-owned form payload directly.
 
-Admin: can inspect all requests and audit events. Admin exists for operational visibility and test coverage, not for a large management console in v1.
+Admin: roadmap. Admin will inspect all requests and audit events. Admin exists for operational visibility and test coverage, not for a large management console in v1.
 
 There is no fake role switcher. Local development may seed users such as `requester@example.test`, `reviewer@example.test`, and `admin@example.test`, but users should authenticate through the real auth/session path.
 
@@ -48,11 +56,14 @@ There is no fake role switcher. Local development may seed users such as `reques
 
 The workflow status is stored as a canonical enum. XState models transition legality and guard behavior, but the database status and audit log are the durable source of truth.
 
-Initial statuses:
+Target workflow statuses:
 
 ```text
+implemented now:
 draft
 submitted
+
+roadmap later:
 under_review
 approved
 rejected
@@ -60,10 +71,13 @@ withdrawn
 revoked
 ```
 
-Initial transitions:
+Target transitions:
 
 ```text
+implemented now:
 draft -> submitted
+
+roadmap later:
 submitted -> under_review
 submitted -> withdrawn
 under_review -> approved
@@ -80,12 +94,17 @@ The system persists the status enum and audit events. It does not persist full X
 
 Commands are transport-independent application operations exposed through tRPC mutations. The web app calls tRPC; the API command service owns validation, authorization, idempotency, transition checks, and transactions.
 
-Initial command set:
+Implemented command set:
 
 ```text
 createDraft
 saveDraft
 submitRequest
+```
+
+Roadmap command set:
+
+```text
 startReview
 approveRequest
 rejectRequest
@@ -157,15 +176,17 @@ Initial authorization rules:
 
 ```text
 requester: create drafts, update own drafts, submit own requests, view own requests, withdraw own submitted requests
-reviewer: list submitted requests, start review, approve under-review requests, reject under-review requests
-admin: inspect all requests and audit events, revoke approved access
+reviewer roadmap: list submitted requests, start review, approve under-review requests, reject under-review requests
+admin roadmap: inspect all requests and audit events, revoke approved access
 ```
+
+The current requester implementation covers create/update/submit/view-own-request behavior. Request withdrawal, reviewer permissions, and admin permissions remain roadmap.
 
 Authorization should be enforced in the API command layer before state transitions are attempted.
 
 ## 8. Idempotency
 
-Submit and review transition commands are idempotent. Idempotency is scoped to the actor, idempotency key, command name, and payload hash.
+Submit and review transition commands are idempotent. Idempotency is scoped to the actor, idempotency key, command name, and payload hash. Today, `submitRequest` is implemented with idempotency. Review/admin transition idempotency is roadmap.
 
 Rules:
 
@@ -176,7 +197,7 @@ same actor + same idempotency key + different command payload returns Idempotenc
 
 The idempotency record should be written in the same logical operation as the workflow transition result. If a command has already completed, retrying it should not create duplicate access requests, duplicate decisions, or duplicate audit events.
 
-Idempotency is required for commands that create durable effects: `submitRequest`, `startReview`, `approveRequest`, `rejectRequest`, `withdrawRequest`, and `revokeAccess`. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
+Idempotency is required for commands that create durable effects. Implemented today: `submitRequest`. Roadmap later: `startReview`, `approveRequest`, `rejectRequest`, `withdrawRequest`, and `revokeAccess`. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
 
 ## 9. Audit Guarantees
 
@@ -227,15 +248,20 @@ The first web app should have just enough UI to exercise the workflow honestly.
 Requester surfaces:
 
 ```text
-study list or study detail entry point
+implemented now:
+study entry point
 access request draft form
-request status page
-own request timeline
+request status state
+own persisted audit timeline
+
+roadmap later:
+withdraw action
 ```
 
 Reviewer surfaces:
 
 ```text
+roadmap later:
 submitted request inbox
 request detail view
 start review action
@@ -247,6 +273,7 @@ audit timeline
 Admin surfaces:
 
 ```text
+roadmap later:
 all requests overview
 audit event inspection
 revoke access action
@@ -271,27 +298,34 @@ authorization rule helpers
 API tests:
 
 ```text
+implemented now:
 unauthenticated command returns Unauthorized
 requester can create and submit own draft
+same idempotency key and payload returns original result
+same idempotency key and different payload returns IdempotencyConflict
+submit transition writes status update and audit event transactionally
+
+roadmap later:
 requester cannot review own request
 reviewer can start review and approve/reject
 reject requires reason
 invalid transition returns InvalidTransition
-same idempotency key and payload returns original result
-same idempotency key and different payload returns IdempotencyConflict
-transition writes status update and audit event transactionally
+review/admin transitions write status update and audit event transactionally
 ```
 
 Web tests:
 
 ```text
+implemented now:
 requester creates draft
 invalid submit shows field/form errors
 valid submit persists request and audit event
 refresh shows submitted status
+timeline shows persisted events
+
+roadmap later:
 reviewer sees request in inbox
 reviewer approves or rejects
-timeline shows persisted events
 ```
 
 End-to-end success is defined by durability: the UI may only claim success after the API has persisted the transition and the audit event. Refreshing the page must never reveal that a workflow action was only local UI state.

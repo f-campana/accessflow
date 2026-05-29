@@ -40,7 +40,9 @@ export const submitRequestInputSchema = draftFieldsSchema.extend({
 
 export const finalDraftFieldsSchema = z.object({
   purpose: requiredSubmissionText("Purpose", 1_000),
-  requestedRole: z.enum(requestedStudyRoles),
+  requestedRole: z.enum(requestedStudyRoles, {
+    error: "Requested role is required"
+  }),
   justification: requiredSubmissionText("Justification", 2_000),
   affiliation: requiredSubmissionText("Affiliation", 300),
   supportingNotes: optionalDraftText(2_000)

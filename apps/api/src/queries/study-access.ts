@@ -1,5 +1,11 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { activeStudyAccessRequestStatuses } from "@accessflow/workflow";
+import {
+  activeStudyAccessRequestStatuses,
+  requestedStudyRoles,
+  type RequestedStudyRole,
+  type StudyAccessRequestStatus,
+  type WorkflowEventType
+} from "@accessflow/workflow";
 
 import type { AuthenticatedActor } from "../context";
 import { db } from "../db/client";
@@ -12,6 +18,20 @@ import {
 
 const toIso = (value: Date | null) => (value ? value.toISOString() : null);
 
+const toRequestedStudyRole = (
+  value: string | null
+): RequestedStudyRole | null => {
+  if (value === null) {
+    return null;
+  }
+
+  if (requestedStudyRoles.includes(value as RequestedStudyRole)) {
+    return value as RequestedStudyRole;
+  }
+
+  throw new Error("Persisted requested role is invalid");
+};
+
 export type StudySummary = {
   id: string;
   slug: string;
@@ -23,8 +43,8 @@ export type StudySummary = {
 export type RequesterStudyAccess = {
   request: {
     id: string;
-    status: string;
-    requestedRole: string | null;
+    status: StudyAccessRequestStatus;
+    requestedRole: RequestedStudyRole | null;
     submittedAt: string | null;
     decidedAt: string | null;
     decisionNote: string | null;
@@ -34,7 +54,7 @@ export type RequesterStudyAccess = {
   draft: {
     id: string;
     purpose: string | null;
-    requestedRole: string | null;
+    requestedRole: RequestedStudyRole | null;
     justification: string | null;
     affiliation: string | null;
     supportingNotes: string | null;
@@ -42,9 +62,9 @@ export type RequesterStudyAccess = {
   } | null;
   auditEvents: Array<{
     id: string;
-    eventType: string;
-    fromStatus: string;
-    toStatus: string;
+    eventType: WorkflowEventType;
+    fromStatus: StudyAccessRequestStatus;
+    toStatus: StudyAccessRequestStatus;
     note: string | null;
     createdAt: string;
   }>;
@@ -128,7 +148,7 @@ export const getRequesterStudyAccess = async (
     request: {
       id: request.id,
       status: request.status,
-      requestedRole: request.requestedRole,
+      requestedRole: toRequestedStudyRole(request.requestedRole),
       submittedAt: toIso(request.submittedAt),
       decidedAt: toIso(request.decidedAt),
       decisionNote: request.decisionNote,
@@ -139,7 +159,7 @@ export const getRequesterStudyAccess = async (
       ? {
           id: draft.id,
           purpose: draft.purpose,
-          requestedRole: draft.requestedRole,
+          requestedRole: toRequestedStudyRole(draft.requestedRole),
           justification: draft.justification,
           affiliation: draft.affiliation,
           supportingNotes: draft.supportingNotes,

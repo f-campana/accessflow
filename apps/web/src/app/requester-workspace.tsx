@@ -1,68 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   authErrorMessageFromBody,
   authErrorMessageFromCaught
 } from "./auth-errors";
 import {
+  createAsyncRequestGuard,
+  type AsyncRequestGuard
+} from "./requester-async-guard";
+import {
   commandExceptionError,
   commandReloadError,
   refreshRetryError
 } from "./requester-command-errors";
+import { isDraftCommandInFlight } from "./requester-draft-edit-lock";
+import {
+  getOrCreateSubmitAttempt,
+  isSubmitAttemptConfirmedSubmitted,
+  reconcileSubmitAttempt,
+  type SubmitAttempt
+} from "./requester-submit-attempt";
+import {
+  AuthPanel,
+  AuditTimelinePanel,
+  RequesterHeader,
+  RequestPanel,
+  StudyPanel
+} from "./requester-workspace-panels";
+import {
+  compactId,
+  emptyDraftForm,
+  toDraftForm,
+  type Actor,
+  type AppError,
+  type DraftForm,
+  type Study,
+  type StudyAccess
+} from "./requester-workspace-model";
 import { trpc } from "../trpc/client";
-
-type Actor = {
-  id: string;
-  email: string;
-  role: "requester" | "reviewer" | "admin";
-};
-
-type Study = {
-  id: string;
-  slug: string;
-  displayName: string;
-  shortDescription: string;
-  sensitivityLabel: string;
-};
-
-type DraftForm = {
-  purpose: string;
-  requestedRole: "" | "viewer" | "analyst";
-  justification: string;
-  affiliation: string;
-  supportingNotes: string;
-};
-
-type AppError = {
-  code: string;
-  message: string;
-  formErrors?: string[];
-  fieldErrors?: Record<string, string[]>;
-};
-
-type StudyAccess = Awaited<
-  ReturnType<(typeof trpc)["myStudyAccess"]["query"]>
->;
-
-type CommandResponse<T> =
-  | {
-      ok: true;
-      value: T;
-    }
-  | {
-      ok: false;
-      error: AppError;
-    };
-
-const emptyDraftForm: DraftForm = {
-  purpose: "",
-  requestedRole: "",
-  justification: "",
-  affiliation: "",
-  supportingNotes: ""
-};
 
 const apiBaseUrl = () =>
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -92,25 +69,6 @@ const requestJson = async (
   }
 };
 
-const toDraftForm = (access: StudyAccess): DraftForm => ({
-  purpose: access?.draft?.purpose ?? "",
-  requestedRole:
-    access?.draft?.requestedRole === "viewer" ||
-    access?.draft?.requestedRole === "analyst"
-      ? access.draft.requestedRole
-      : "",
-  justification: access?.draft?.justification ?? "",
-  affiliation: access?.draft?.affiliation ?? "",
-  supportingNotes: access?.draft?.supportingNotes ?? ""
-});
-
-const compactId = (value: string) => value.slice(0, 8);
-
-const firstFieldError = (
-  fieldErrors: Record<string, string[]> | undefined,
-  field: keyof DraftForm
-) => fieldErrors?.[field]?.[0] ?? null;
-
 export function RequesterWorkspace() {
   const [actor, setActor] = useState<Actor | null>(null);
   const [studies, setStudies] = useState<Study[]>([]);
@@ -124,10 +82,23 @@ export function RequesterWorkspace() {
   const [error, setError] = useState<AppError | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [canRetryRefresh, setCanRetryRefresh] = useState(false);
+  const [submitAttempt, setSubmitAttempt] = useState<SubmitAttempt | null>(null);
+  const selectedStudyIdRef = useRef(selectedStudyId);
+  const accessRequestGuardRef = useRef<AsyncRequestGuard | null>(null);
+
+  if (!accessRequestGuardRef.current) {
+    accessRequestGuardRef.current = createAsyncRequestGuard();
+  }
+
+  const accessRequestGuard = accessRequestGuardRef.current;
 
   useEffect(() => {
     setAuthEmail(`requester-${createClientId()}@example.test`);
   }, []);
+
+  useEffect(() => {
+    selectedStudyIdRef.current = selectedStudyId;
+  }, [selectedStudyId]);
 
   const selectedStudy = useMemo(
     () => studies.find((study) => study.id === selectedStudyId) ?? null,
@@ -137,73 +108,126 @@ export function RequesterWorkspace() {
   const draftId = access?.draft?.id ?? null;
   const isDraft = access?.request.status === "draft";
   const isSubmitted = access?.request.status === "submitted";
+  const draftCommandInFlight = isDraftCommandInFlight(busy);
 
-  const loadWorkspace = async () => {
+  const applyStudyAccess = useCallback((nextAccess: StudyAccess) => {
+    setAccess(nextAccess);
+    setDraftForm(toDraftForm(nextAccess));
+    setSubmitAttempt((currentAttempt) =>
+      reconcileSubmitAttempt(currentAttempt, nextAccess)
+    );
+  }, []);
+
+  const isLatestStudyRequest = useCallback(
+    (requestId: number, studyId: string) =>
+      accessRequestGuard.isCurrent(requestId) &&
+      selectedStudyIdRef.current === studyId,
+    [accessRequestGuard]
+  );
+
+  const loadWorkspace = useCallback(async () => {
+    const requestId = accessRequestGuard.begin();
+
     setBusy("Loading workspace");
     setError(null);
     setAuthError(null);
     setNotice(null);
     setCanRetryRefresh(false);
+    setSubmitAttempt(null);
 
     try {
       const currentActor = await trpc.me.query();
+
+      if (!accessRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+
       setActor(currentActor);
 
       if (!currentActor) {
         setStudies([]);
+        selectedStudyIdRef.current = "";
         setSelectedStudyId("");
-        setAccess(null);
-        setDraftForm(emptyDraftForm);
+        applyStudyAccess(null);
         return;
       }
 
       const nextStudies = await trpc.studies.query();
+
+      if (!accessRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+
       setStudies(nextStudies);
 
-      const nextStudyId = selectedStudyId || nextStudies[0]?.id || "";
+      const nextStudyId = selectedStudyIdRef.current || nextStudies[0]?.id || "";
+      selectedStudyIdRef.current = nextStudyId;
       setSelectedStudyId(nextStudyId);
 
       if (!nextStudyId) {
-        setAccess(null);
-        setDraftForm(emptyDraftForm);
+        applyStudyAccess(null);
         return;
       }
 
       const nextAccess = await trpc.myStudyAccess.query({
         studyId: nextStudyId
       });
-      setAccess(nextAccess);
-      setDraftForm(toDraftForm(nextAccess));
+
+      if (!isLatestStudyRequest(requestId, nextStudyId)) {
+        return;
+      }
+
+      applyStudyAccess(nextAccess);
     } catch (caught) {
+      if (!accessRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+
       setAuthError(
         caught instanceof Error ? caught.message : "Workspace could not load"
       );
     } finally {
-      setBusy(null);
+      if (accessRequestGuard.isCurrent(requestId)) {
+        setBusy(null);
+      }
     }
-  };
+  }, [accessRequestGuard, applyStudyAccess, isLatestStudyRequest]);
 
   useEffect(() => {
     void loadWorkspace();
-  }, []);
+  }, [loadWorkspace]);
 
   const selectStudy = async (studyId: string) => {
+    const requestId = accessRequestGuard.begin();
+
+    selectedStudyIdRef.current = studyId;
     setSelectedStudyId(studyId);
     setBusy("Loading request");
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
+    setSubmitAttempt(null);
 
     try {
       const nextAccess = await trpc.myStudyAccess.query({ studyId });
-      setAccess(nextAccess);
-      setDraftForm(toDraftForm(nextAccess));
+
+      if (!isLatestStudyRequest(requestId, studyId)) {
+        return;
+      }
+
+      applyStudyAccess(nextAccess);
     } catch (caught) {
+      if (!accessRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+
       setAuthError(
         caught instanceof Error ? caught.message : "Request could not load"
       );
     } finally {
-      setBusy(null);
+      if (accessRequestGuard.isCurrent(requestId)) {
+        setBusy(null);
+      }
     }
   };
 
@@ -213,6 +237,8 @@ export function RequesterWorkspace() {
     setAuthError(null);
     setNotice(null);
     setCanRetryRefresh(false);
+    setSubmitAttempt(null);
+    accessRequestGuard.invalidate();
 
     try {
       await requestJson(mode, {
@@ -238,6 +264,8 @@ export function RequesterWorkspace() {
     setError(null);
     setAuthError(null);
     setCanRetryRefresh(false);
+    setSubmitAttempt(null);
+    accessRequestGuard.invalidate();
 
     try {
       await requestJson("sign-out", {});
@@ -249,51 +277,95 @@ export function RequesterWorkspace() {
     }
   };
 
-  const reloadSelectedStudyAccess = async () => {
-    if (!selectedStudyId) {
-      return;
+  const reloadStudyAccess = async (
+    studyId: string
+  ): Promise<StudyAccess | undefined> => {
+    if (!studyId || selectedStudyIdRef.current !== studyId) {
+      return undefined;
     }
 
+    const requestId = accessRequestGuard.begin();
     const nextAccess = await trpc.myStudyAccess.query({
-      studyId: selectedStudyId
+      studyId
     });
-    setAccess(nextAccess);
-    setDraftForm(toDraftForm(nextAccess));
+
+    if (!isLatestStudyRequest(requestId, studyId)) {
+      return undefined;
+    }
+
+    applyStudyAccess(nextAccess);
+    return nextAccess;
   };
 
   const refreshAfterCommand = async (
+    studyId: string,
     reloadError: AppError,
-    nextNotice: string
+    nextNotice: string,
+    isConfirmed: (nextAccess: StudyAccess) => boolean = () => true
   ) => {
     try {
-      await reloadSelectedStudyAccess();
+      const nextAccess = await reloadStudyAccess(studyId);
+
+      if (nextAccess === undefined) {
+        return;
+      }
+
+      if (!isConfirmed(nextAccess)) {
+        setError(reloadError);
+        setCanRetryRefresh(true);
+        return;
+      }
+
       setCanRetryRefresh(false);
       setNotice(nextNotice);
     } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
       setError(reloadError);
       setCanRetryRefresh(true);
     }
   };
 
   const retrySelectedStudyRefresh = async () => {
+    const studyId = selectedStudyIdRef.current;
+
+    if (!studyId) {
+      return;
+    }
+
     setBusy("Refreshing workspace");
     setError(null);
     setNotice(null);
 
     try {
-      await reloadSelectedStudyAccess();
+      const nextAccess = await reloadStudyAccess(studyId);
+
+      if (nextAccess === undefined) {
+        return;
+      }
+
       setCanRetryRefresh(false);
       setNotice("Workspace refreshed.");
     } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
       setError(refreshRetryError());
       setCanRetryRefresh(true);
     } finally {
-      setBusy(null);
+      if (selectedStudyIdRef.current === studyId) {
+        setBusy(null);
+      }
     }
   };
 
   const createDraft = async () => {
-    if (!selectedStudyId) {
+    const studyId = selectedStudyIdRef.current;
+
+    if (!studyId) {
       return;
     }
 
@@ -303,28 +375,41 @@ export function RequesterWorkspace() {
     setCanRetryRefresh(false);
 
     try {
-      const response = (await trpc.createDraft.mutate({
-        studyId: selectedStudyId
-      })) as CommandResponse<{ draftId: string }>;
+      const response = await trpc.createDraft.mutate({
+        studyId
+      });
 
       if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
         setError(response.error);
         return;
       }
 
       await refreshAfterCommand(
+        studyId,
         commandReloadError("createDraft"),
         `Draft ${compactId(response.value.draftId)} created.`
       );
     } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
       setError(commandExceptionError("createDraft"));
     } finally {
-      setBusy(null);
+      if (selectedStudyIdRef.current === studyId) {
+        setBusy(null);
+      }
     }
   };
 
   const saveDraft = async () => {
-    if (!draftId) {
+    const studyId = selectedStudyIdRef.current;
+
+    if (!draftId || !studyId) {
       return;
     }
 
@@ -334,30 +419,43 @@ export function RequesterWorkspace() {
     setCanRetryRefresh(false);
 
     try {
-      const response = (await trpc.saveDraft.mutate({
+      const response = await trpc.saveDraft.mutate({
         draftId,
         ...draftForm,
         requestedRole: draftForm.requestedRole || null
-      })) as CommandResponse<{ draftId: string }>;
+      });
 
       if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
         setError(response.error);
         return;
       }
 
       await refreshAfterCommand(
+        studyId,
         commandReloadError("saveDraft"),
         `Draft ${compactId(response.value.draftId)} saved.`
       );
     } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
       setError(commandExceptionError("saveDraft"));
     } finally {
-      setBusy(null);
+      if (selectedStudyIdRef.current === studyId) {
+        setBusy(null);
+      }
     }
   };
 
   const submitRequest = async () => {
-    if (!draftId) {
+    const studyId = selectedStudyIdRef.current;
+
+    if (!draftId || !studyId) {
       return;
     }
 
@@ -366,31 +464,55 @@ export function RequesterWorkspace() {
     setNotice(null);
     setCanRetryRefresh(false);
 
+    const nextSubmitAttempt = getOrCreateSubmitAttempt(
+      submitAttempt,
+      draftId,
+      createClientId
+    );
+    setSubmitAttempt(nextSubmitAttempt);
+
     try {
-      const response = (await trpc.submitRequest.mutate({
+      const response = await trpc.submitRequest.mutate({
         draftId,
-        idempotencyKey: `submit-${createClientId()}`,
+        idempotencyKey: nextSubmitAttempt.idempotencyKey,
         ...draftForm,
         requestedRole: draftForm.requestedRole || null
-      })) as CommandResponse<{ requestId: string }>;
+      });
 
       if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
         setError(response.error);
         return;
       }
 
       await refreshAfterCommand(
+        studyId,
         commandReloadError("submitRequest"),
-        `Request ${compactId(response.value.requestId)} submitted.`
+        `Request ${compactId(response.value.requestId)} submitted.`,
+        (nextAccess) =>
+          isSubmitAttemptConfirmedSubmitted(nextSubmitAttempt, nextAccess)
       );
     } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
       setError(commandExceptionError("submitRequest"));
     } finally {
-      setBusy(null);
+      if (selectedStudyIdRef.current === studyId) {
+        setBusy(null);
+      }
     }
   };
 
   const updateDraft = (field: keyof DraftForm, value: string) => {
+    if (draftCommandInFlight) {
+      return;
+    }
+
     setDraftForm((current) => ({
       ...current,
       [field]: value
@@ -399,329 +521,60 @@ export function RequesterWorkspace() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">AccessFlow</p>
-          <h1>Study access request</h1>
-        </div>
-        <div className="session-pill">
-          {actor ? (
-            <>
-              <span>{actor.email}</span>
-              <button type="button" onClick={signOut} disabled={Boolean(busy)}>
-                Sign out
-              </button>
-            </>
-          ) : (
-            <span>No active session</span>
-          )}
-        </div>
-      </header>
+      <RequesterHeader
+        actor={actor}
+        busy={Boolean(busy)}
+        onSignOut={() => void signOut()}
+      />
 
       {busy ? <p className="status-line">{busy}</p> : null}
-      {notice ? <p className="notice">{notice}</p> : null}
-      {authError ? <p className="error-banner">{authError}</p> : null}
+      {notice ? <p className="notice" role="status">{notice}</p> : null}
+      {authError ? (
+        <p className="error-banner" role="alert">
+          {authError}
+        </p>
+      ) : null}
 
       {!actor ? (
-        <section className="panel auth-panel" aria-labelledby="auth-title">
-          <div>
-            <p className="eyebrow">Requester login</p>
-            <h2 id="auth-title">Start with a real local session</h2>
-          </div>
-
-          <label>
-            Name
-            <input
-              value={authName}
-              onChange={(event) => setAuthName(event.target.value)}
-              autoComplete="name"
-            />
-          </label>
-
-          <label>
-            Email
-            <input
-              type="email"
-              value={authEmail}
-              onChange={(event) => setAuthEmail(event.target.value)}
-              autoComplete="email"
-            />
-          </label>
-
-          <label>
-            Password
-            <input
-              type="password"
-              value={authPassword}
-              readOnly
-              autoComplete="current-password"
-            />
-          </label>
-
-          <div className="button-row">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void authenticate("sign-up/email")}
-              disabled={Boolean(busy)}
-            >
-              Sign up
-            </button>
-            <button
-              type="button"
-              onClick={() => void authenticate("sign-in/email")}
-              disabled={Boolean(busy)}
-            >
-              Sign in
-            </button>
-          </div>
-        </section>
+        <AuthPanel
+          authEmail={authEmail}
+          authName={authName}
+          authPassword={authPassword}
+          busy={Boolean(busy)}
+          onAuthenticate={(mode) => void authenticate(mode)}
+          onAuthEmailChange={setAuthEmail}
+          onAuthNameChange={setAuthName}
+        />
       ) : (
         <div className="workspace-grid">
-          <section className="panel study-panel" aria-labelledby="study-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Workspace</p>
-                <h2 id="study-title">
-                  {selectedStudy?.displayName ?? "No study workspace"}
-                </h2>
-              </div>
-              {access ? (
-                <span className={`status-badge status-${access.request.status}`}>
-                  {access.request.status.replace("_", " ")}
-                </span>
-              ) : null}
-            </div>
-
-            {studies.length > 1 ? (
-              <label>
-                Study
-                <select
-                  value={selectedStudyId}
-                  onChange={(event) => void selectStudy(event.target.value)}
-                >
-                  {studies.map((study) => (
-                    <option key={study.id} value={study.id}>
-                      {study.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            {selectedStudy ? (
-              <>
-                <p className="description">{selectedStudy.shortDescription}</p>
-                <dl className="meta-list">
-                  <div>
-                    <dt>Sensitivity</dt>
-                    <dd>{selectedStudy.sensitivityLabel}</dd>
-                  </div>
-                  <div>
-                    <dt>Study ID</dt>
-                    <dd>{compactId(selectedStudy.id)}</dd>
-                  </div>
-                </dl>
-              </>
-            ) : (
-              <p className="description">
-                Seed the local database before creating a request.
-              </p>
-            )}
-
-            {!access && selectedStudy ? (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => void createDraft()}
-                disabled={Boolean(busy) || canRetryRefresh}
-              >
-                Create request draft
-              </button>
-            ) : null}
-          </section>
-
-          <section className="panel request-panel" aria-labelledby="request-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Requester form</p>
-                <h2 id="request-title">Access request</h2>
-              </div>
-              {access?.request.id ? (
-                <span className="muted">#{compactId(access.request.id)}</span>
-              ) : null}
-            </div>
-
-            {error ? (
-              <div className="command-error" role="alert">
-                <strong>{error.code}</strong>
-                <span>{error.message}</span>
-                {error.formErrors?.map((formError) => (
-                  <span key={formError}>{formError}</span>
-                ))}
-                {canRetryRefresh ? (
-                  <button
-                    type="button"
-                    onClick={() => void retrySelectedStudyRefresh()}
-                    disabled={Boolean(busy)}
-                  >
-                    Retry refresh
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
-            {!access ? (
-              <p className="empty-state">
-                Create a draft to start the requester workflow.
-              </p>
-            ) : (
-              <form
-                className="request-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submitRequest();
-                }}
-              >
-                <label>
-                  Purpose
-                  <textarea
-                    value={draftForm.purpose}
-                    onChange={(event) => updateDraft("purpose", event.target.value)}
-                    disabled={!isDraft}
-                    rows={4}
-                  />
-                  <FieldError error={firstFieldError(error?.fieldErrors, "purpose")} />
-                </label>
-
-                <label>
-                  Requested role
-                  <select
-                    value={draftForm.requestedRole}
-                    onChange={(event) =>
-                      updateDraft("requestedRole", event.target.value)
-                    }
-                    disabled={!isDraft}
-                  >
-                    <option value="">Select role</option>
-                    <option value="viewer">Viewer</option>
-                    <option value="analyst">Analyst</option>
-                  </select>
-                  <FieldError
-                    error={firstFieldError(error?.fieldErrors, "requestedRole")}
-                  />
-                </label>
-
-                <label>
-                  Justification
-                  <textarea
-                    value={draftForm.justification}
-                    onChange={(event) =>
-                      updateDraft("justification", event.target.value)
-                    }
-                    disabled={!isDraft}
-                    rows={4}
-                  />
-                  <FieldError
-                    error={firstFieldError(error?.fieldErrors, "justification")}
-                  />
-                </label>
-
-                <label>
-                  Affiliation
-                  <input
-                    value={draftForm.affiliation}
-                    onChange={(event) =>
-                      updateDraft("affiliation", event.target.value)
-                    }
-                    disabled={!isDraft}
-                  />
-                  <FieldError
-                    error={firstFieldError(error?.fieldErrors, "affiliation")}
-                  />
-                </label>
-
-                <label>
-                  Supporting notes
-                  <textarea
-                    value={draftForm.supportingNotes}
-                    onChange={(event) =>
-                      updateDraft("supportingNotes", event.target.value)
-                    }
-                    disabled={!isDraft}
-                    rows={3}
-                  />
-                </label>
-
-                {isSubmitted ? (
-                  <p className="submitted-note">
-                    Submitted at {access.request.submittedAt}
-                  </p>
-                ) : null}
-
-                <div className="button-row">
-                  <button
-                    type="button"
-                    onClick={() => void saveDraft()}
-                    disabled={
-                      !draftId || !isDraft || Boolean(busy) || canRetryRefresh
-                    }
-                  >
-                    Save draft
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={
-                      !draftId || !isDraft || Boolean(busy) || canRetryRefresh
-                    }
-                  >
-                    Submit request
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-
-          <section className="panel timeline-panel" aria-labelledby="timeline-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Audit timeline</p>
-                <h2 id="timeline-title">Persisted events</h2>
-              </div>
-              {access ? (
-                <span className="muted">
-                  {access.auditEvents.length} event
-                  {access.auditEvents.length === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
-
-            {!access || access.auditEvents.length === 0 ? (
-              <p className="empty-state">No durable workflow events yet.</p>
-            ) : (
-              <ol className="timeline-list">
-                {access.auditEvents.map((event) => (
-                  <li key={event.id}>
-                    <span className="timeline-dot" aria-hidden="true" />
-                    <div>
-                      <strong>{event.eventType}</strong>
-                      <span>
-                        {event.fromStatus} to {event.toStatus}
-                      </span>
-                      <time dateTime={event.createdAt}>{event.createdAt}</time>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          <StudyPanel
+            access={access}
+            busy={Boolean(busy)}
+            canRetryRefresh={canRetryRefresh}
+            selectedStudy={selectedStudy}
+            selectedStudyId={selectedStudyId}
+            studies={studies}
+            onCreateDraft={() => void createDraft()}
+            onSelectStudy={(studyId) => void selectStudy(studyId)}
+          />
+          <RequestPanel
+            access={access}
+            busy={Boolean(busy)}
+            canRetryRefresh={canRetryRefresh}
+            draftCommandInFlight={draftCommandInFlight}
+            draftForm={draftForm}
+            draftId={draftId}
+            error={error}
+            isDraft={isDraft}
+            isSubmitted={isSubmitted}
+            onRetryRefresh={() => void retrySelectedStudyRefresh()}
+            onSaveDraft={() => void saveDraft()}
+            onSubmitRequest={() => void submitRequest()}
+            onUpdateDraft={updateDraft}
+          />
+          <AuditTimelinePanel access={access} />
         </div>
       )}
     </main>
   );
-}
-
-function FieldError({ error }: { error: string | null }) {
-  return error ? <span className="field-error">{error}</span> : null;
 }

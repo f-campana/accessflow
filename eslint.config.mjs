@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default [
@@ -13,6 +14,14 @@ export default [
     ]
   },
   js.configs.recommended,
+  {
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    }
+  },
   ...tseslint.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],
@@ -22,6 +31,9 @@ export default [
         ...globals.node
       }
     },
+    plugins: {
+      "react-hooks": reactHooks
+    },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -29,7 +41,9 @@ export default [
           "argsIgnorePattern": "^_",
           "varsIgnorePattern": "^_"
         }
-      ]
+      ],
+      "react-hooks/exhaustive-deps": "error",
+      "react-hooks/rules-of-hooks": "error"
     }
   }
 ];

@@ -27,6 +27,30 @@ describe("auth error messages", () => {
     );
   });
 
+  it("does not render unknown JSON payloads", () => {
+    expect(
+      authErrorMessageFromBody(
+        '{"message":"database host leaked","code":"SOME_INTERNAL_CODE"}',
+        500
+      )
+    ).toBe("Auth request failed. Try again.");
+  });
+
+  it("does not render malformed non-JSON payloads", () => {
+    expect(authErrorMessageFromBody("<html>Internal Error</html>", 500)).toBe(
+      "Auth request failed. Try again."
+    );
+  });
+
+  it("falls back when caught errors look like raw payloads", () => {
+    expect(
+      authErrorMessageFromCaught(
+        new Error('{"message":"provider payload","code":"INTERNAL"}'),
+        "Auth failed"
+      )
+    ).toBe("Auth failed");
+  });
+
   it("keeps ordinary thrown error messages", () => {
     expect(authErrorMessageFromCaught(new Error("Network unavailable"), "Auth failed"))
       .toBe("Network unavailable");

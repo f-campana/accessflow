@@ -1,0 +1,43 @@
+import type { trpc } from "../trpc/client";
+import type { AppError } from "@accessflow/core";
+import type { RequestedStudyRole } from "@accessflow/workflow";
+
+export type Actor = NonNullable<Awaited<ReturnType<(typeof trpc)["me"]["query"]>>>;
+
+export type Study = Awaited<ReturnType<(typeof trpc)["studies"]["query"]>>[number];
+
+export type DraftForm = {
+  purpose: string;
+  requestedRole: "" | RequestedStudyRole;
+  justification: string;
+  affiliation: string;
+  supportingNotes: string;
+};
+
+export type { AppError };
+
+export type StudyAccess = Awaited<
+  ReturnType<(typeof trpc)["myStudyAccess"]["query"]>
+>;
+
+export const emptyDraftForm: DraftForm = {
+  purpose: "",
+  requestedRole: "",
+  justification: "",
+  affiliation: "",
+  supportingNotes: ""
+};
+
+export const toDraftForm = (access: StudyAccess): DraftForm => ({
+  purpose: access?.draft?.purpose ?? "",
+  requestedRole:
+    access?.draft?.requestedRole === "viewer" ||
+    access?.draft?.requestedRole === "analyst"
+      ? access.draft.requestedRole
+      : "",
+  justification: access?.draft?.justification ?? "",
+  affiliation: access?.draft?.affiliation ?? "",
+  supportingNotes: access?.draft?.supportingNotes ?? ""
+});
+
+export const compactId = (value: string) => value.slice(0, 8);

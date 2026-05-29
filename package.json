@@ -11,17 +11,20 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @accessflow/api --filter @accessflow/web dev",
     "mobile:preview": "node scripts/mobile-preview.mjs",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "eslint eslint.config.mjs playwright.config.ts scripts tests && pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",

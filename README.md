@@ -35,6 +35,14 @@ Current focus:
 - Keep the requester lifecycle honest end to end before expanding product surface area.
 - Do not build reviewer/admin flows until the requester submit path is reliable under failure and retry.
 
+Current implementation stops at the requester workflow:
+
+```text
+implemented: sign up/sign in, study read, draft create/save, submit, persisted audit timeline
+next: finish the requester hardening backlog in docs/40-review/requester-workflow-hardening-todo.md
+later roadmap: reviewer/admin inboxes, review decisions, withdrawal/revocation, broader operational surfaces
+```
+
 ## Read First
 
 1. `docs/00-product/accessflow-workflow-brief.md`
@@ -99,6 +107,20 @@ That command starts Postgres, applies API migrations, seeds the synthetic study 
 
 For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover sign-up, seeded study visibility, draft creation, submission, persisted audit timeline, readable auth errors, and no horizontal overflow at phone width.
 
+For repeatable requester workflow browser coverage, install the Playwright browser once:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Then run:
+
+```bash
+pnpm test:e2e
+```
+
+This starts the local Postgres/API/web stack through Playwright and exercises the requester path at phone width.
+
 ## Verification
 
 Run:
@@ -107,6 +129,7 @@ Run:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 git diff --check
 ```
 
@@ -115,6 +138,9 @@ The API test runner uses an isolated `accessflow_test` database by default so ve
 See `docs/30-quality/repo-quality-gate.md` for the full pass-closing standard.
 
 See `docs/40-review/requester-workflow-hardening-todo.md` for the ordered hardening backlog. Process it one issue per pass before expanding the product surface.
+
+Reviewer/admin flows are deliberately roadmap-only until that requester hardening backlog is substantially complete.
+For immediate next work, the backlog is the source of truth over broader roadmap language in the product brief.
 
 ## Boundaries
 

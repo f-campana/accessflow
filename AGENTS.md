@@ -18,6 +18,8 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
+Current implementation scope is requester-only: sign-up/sign-in, study read, draft create/save, submit, and persisted audit timeline. Reviewer/admin commands and UI are roadmap until the requester hardening backlog is substantially complete. For immediate next work, `docs/40-review/requester-workflow-hardening-todo.md` overrides broader roadmap language.
+
 ## Project Shape
 
 ```text
@@ -44,6 +46,7 @@ Keep ownership strict:
 - Keep forms plain React/HTML in v1. Conform is deferred.
 - Do not claim HIPAA, GDPR, clinical-grade, or medical-device compliance.
 - Do not add document uploads, notifications, queues, analytics, tenants/orgs, or a generic workflow builder unless explicitly requested.
+- Do not start reviewer/admin flows while `docs/40-review/requester-workflow-hardening-todo.md` still lists requester hardening work as the immediate sequence.
 
 ## Backend And Persistence
 
