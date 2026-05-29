@@ -1,5 +1,5 @@
 import { and, count, eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { workflowEventTypes } from "@accessflow/workflow";
 
@@ -15,6 +15,7 @@ import {
   resetDatabase
 } from "../../test-helpers/db";
 import { createDraft } from "./create-draft";
+import { defaultDependencies } from "./command-transaction";
 import { submitRequest } from "./submit-request";
 import { validSubmission } from "./test-data";
 
@@ -317,18 +318,18 @@ describe("submitRequest", () => {
       expect(failures[0].error.code).toBe("InvalidTransition");
     }
 
-    const [pendingLoserCount] = await db
+    const [pendingIdempotencyCount] = await db
       .select({ value: count() })
       .from(idempotencyKeys)
       .where(
         and(
           eq(idempotencyKeys.actorId, actor.id),
           eq(idempotencyKeys.commandName, "submitRequest"),
-          eq(idempotencyKeys.key, "submit-concurrent-loser-1")
+          eq(idempotencyKeys.status, "pending")
         )
       );
 
-    expect(pendingLoserCount?.value).toBe(0);
+    expect(pendingIdempotencyCount?.value).toBe(0);
   });
 
   it("keeps persisted audit event types aligned with workflow vocabulary", async () => {
@@ -357,5 +358,36 @@ describe("submitRequest", () => {
       .limit(1);
 
     expect(workflowEventTypes).toContain(auditEvent?.eventType);
+  });
+
+  it("normalizes unexpected dependency failures", async () => {
+    const actor = await createTestActor();
+    const failure = new Error("database unavailable");
+    const reportUnexpectedError = vi.fn();
+
+    const result = await submitRequest(
+      actor,
+      {
+        draftId: crypto.randomUUID(),
+        idempotencyKey: "submit-unexpected-1",
+        ...validSubmission
+      },
+      {
+        ...defaultDependencies,
+        db: {
+          transaction: async () => {
+            throw failure;
+          }
+        } as unknown as typeof defaultDependencies.db,
+        reportUnexpectedError
+      }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("Unexpected");
+      expect(result.error.message).toBe("Unexpected command failure");
+    }
+    expect(reportUnexpectedError).toHaveBeenCalledWith(failure);
   });
 });

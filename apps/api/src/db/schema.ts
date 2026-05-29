@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   jsonb,
   pgEnum,
@@ -12,9 +13,14 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
+  activeStudyAccessRequestStatuses,
+  requestedStudyRoles,
   studyAccessRequestStatuses,
   workflowEventTypes
 } from "@accessflow/workflow";
+
+const sqlStringList = (values: readonly string[]) =>
+  sql.raw(values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", "));
 
 export const appRoleValues = ["requester", "reviewer", "admin"] as const;
 export const appRole = pgEnum("app_role", appRoleValues);
@@ -154,7 +160,41 @@ export const studyAccessRequests = pgTable(
   (table) => ({
     requesterIdx: index("study_access_requests_requester_idx").on(table.requesterId),
     studyIdx: index("study_access_requests_study_idx").on(table.studyId),
-    statusIdx: index("study_access_requests_status_idx").on(table.status)
+    statusIdx: index("study_access_requests_status_idx").on(table.status),
+    requestedRoleCheck: check(
+      "study_access_requests_requested_role_check",
+      sql`${table.requestedRole} is null or ${table.requestedRole} in (${sqlStringList(
+        requestedStudyRoles
+      )})`
+    ),
+    stateFieldsCheck: check(
+      "study_access_requests_state_fields_check",
+      sql`
+        (
+          ${table.status} = 'draft'
+          and ${table.submittedAt} is null
+          and ${table.decidedAt} is null
+          and ${table.decisionNote} is null
+        )
+        or
+        (
+          ${table.status} <> 'draft'
+          and ${table.submittedAt} is not null
+          and ${table.requestedRole} is not null
+        )
+      `
+    ),
+    activeRequesterStudyIdx: uniqueIndex(
+      "study_access_requests_active_requester_study_idx"
+    )
+      .on(table.requesterId, table.studyId)
+      .where(
+        sql`${table.status} in (${sql.raw(
+          activeStudyAccessRequestStatuses
+            .map((status) => `'${status}'`)
+            .join(", ")
+        )})`
+      )
   })
 );
 
@@ -177,7 +217,13 @@ export const studyAccessRequestDrafts = pgTable(
   },
   (table) => ({
     requestIdx: uniqueIndex("study_access_request_drafts_request_idx").on(table.requestId),
-    ownerIdx: index("study_access_request_drafts_owner_idx").on(table.ownerId)
+    ownerIdx: index("study_access_request_drafts_owner_idx").on(table.ownerId),
+    requestedRoleCheck: check(
+      "study_access_request_drafts_requested_role_check",
+      sql`${table.requestedRole} is null or ${table.requestedRole} in (${sqlStringList(
+        requestedStudyRoles
+      )})`
+    )
   })
 );
 

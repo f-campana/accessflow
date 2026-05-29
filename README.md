@@ -39,7 +39,8 @@ Current focus:
 
 1. `docs/00-product/accessflow-workflow-brief.md`
 2. `docs/30-quality/repo-quality-gate.md`
-3. `AGENTS.md`
+3. `docs/40-review/requester-workflow-hardening-todo.md`
+4. `AGENTS.md`
 
 The core invariant is:
 
@@ -112,6 +113,8 @@ git diff --check
 The API test runner uses an isolated `accessflow_test` database by default so verification cannot truncate the active development or mobile-preview database. To override the test database URL, set `ACCESSFLOW_TEST_DATABASE_URL`.
 
 See `docs/30-quality/repo-quality-gate.md` for the full pass-closing standard.
+
+See `docs/40-review/requester-workflow-hardening-todo.md` for the ordered hardening backlog. Process it one issue per pass before expanding the product surface.
 
 ## Boundaries
 

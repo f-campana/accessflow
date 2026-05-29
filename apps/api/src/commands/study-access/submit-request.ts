@@ -241,6 +241,6 @@ export const submitRequest = async (
       return ok(response);
     });
   } catch (error) {
-    return rollbackCommandError(error);
+    return rollbackCommandError(error, dependencies);
   }
 };

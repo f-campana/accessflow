@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "study_access_requests_active_requester_study_idx" ON "study_access_requests" USING btree ("requester_id","study_id") WHERE "study_access_requests"."status" in ('draft', 'submitted', 'under_review', 'approved');

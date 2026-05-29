@@ -14,6 +14,17 @@ export const studyAccessRequestStatuses = [
 export type StudyAccessRequestStatus =
   (typeof studyAccessRequestStatuses)[number];
 
+export const activeStudyAccessRequestStatuses = [
+  "draft",
+  "submitted",
+  "under_review",
+  "approved"
+] as const satisfies readonly StudyAccessRequestStatus[];
+
+export const requestedStudyRoles = ["viewer", "analyst"] as const;
+
+export type RequestedStudyRole = (typeof requestedStudyRoles)[number];
+
 export const workflowEventTypes = ["submitRequest"] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];

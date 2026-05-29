@@ -18,7 +18,7 @@ import {
 } from "../../db/schema";
 import { saveDraftInputSchema, type DraftFields } from "../validation";
 import { ensureRequester } from "./authorization";
-import { defaultDependencies } from "./command-transaction";
+import { defaultDependencies, rollbackCommandError } from "./command-transaction";
 import {
   definedDraftValues,
   mergeDraftFields,
@@ -47,62 +47,66 @@ export const saveDraft = async (
     return parsed;
   }
 
-  return dependencies.db.transaction(async (tx) => {
-    const [draftRecord] = await tx
-      .select({
-        draftId: studyAccessRequestDrafts.id,
-        requestId: studyAccessRequestDrafts.requestId,
-        ownerId: studyAccessRequestDrafts.ownerId,
-        status: studyAccessRequests.status,
-        purpose: studyAccessRequestDrafts.purpose,
-        requestedRole: studyAccessRequestDrafts.requestedRole,
-        justification: studyAccessRequestDrafts.justification,
-        affiliation: studyAccessRequestDrafts.affiliation,
-        supportingNotes: studyAccessRequestDrafts.supportingNotes
-      })
-      .from(studyAccessRequestDrafts)
-      .innerJoin(
-        studyAccessRequests,
-        eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
-      )
-      .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId))
-      .limit(1)
-      .for("update");
+  try {
+    return await dependencies.db.transaction(async (tx) => {
+      const [draftRecord] = await tx
+        .select({
+          draftId: studyAccessRequestDrafts.id,
+          requestId: studyAccessRequestDrafts.requestId,
+          ownerId: studyAccessRequestDrafts.ownerId,
+          status: studyAccessRequests.status,
+          purpose: studyAccessRequestDrafts.purpose,
+          requestedRole: studyAccessRequestDrafts.requestedRole,
+          justification: studyAccessRequestDrafts.justification,
+          affiliation: studyAccessRequestDrafts.affiliation,
+          supportingNotes: studyAccessRequestDrafts.supportingNotes
+        })
+        .from(studyAccessRequestDrafts)
+        .innerJoin(
+          studyAccessRequests,
+          eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
+        )
+        .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId))
+        .limit(1)
+        .for("update");
 
-    if (!draftRecord) {
-      return err(notFound("Draft not found"));
-    }
+      if (!draftRecord) {
+        return err(notFound("Draft not found"));
+      }
 
-    if (draftRecord.ownerId !== actor.id) {
-      return err(forbidden("Cannot update another requester's draft"));
-    }
+      if (draftRecord.ownerId !== actor.id) {
+        return err(forbidden("Cannot update another requester's draft"));
+      }
 
-    if (draftRecord.status !== "draft") {
-      return err(invalidTransition("Only draft requests can be edited"));
-    }
+      if (draftRecord.status !== "draft") {
+        return err(invalidTransition("Only draft requests can be edited"));
+      }
 
-    const currentDraft = readDraftFields(draftRecord);
+      const currentDraft = readDraftFields(draftRecord);
 
-    if (!currentDraft.ok) {
-      return currentDraft;
-    }
+      if (!currentDraft.ok) {
+        return currentDraft;
+      }
 
-    const nextDraft = mergeDraftFields(currentDraft.value, parsed.value);
-    const updateValues = definedDraftValues(parsed.value);
+      const nextDraft = mergeDraftFields(currentDraft.value, parsed.value);
+      const updateValues = definedDraftValues(parsed.value);
 
-    await tx
-      .update(studyAccessRequestDrafts)
-      .set({
-        ...updateValues,
-        updatedAt: new Date()
-      })
-      .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId));
+      await tx
+        .update(studyAccessRequestDrafts)
+        .set({
+          ...updateValues,
+          updatedAt: new Date()
+        })
+        .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId));
 
-    return ok({
-      requestId: draftRecord.requestId,
-      draftId: draftRecord.draftId,
-      status: "draft",
-      draft: nextDraft
+      return ok({
+        requestId: draftRecord.requestId,
+        draftId: draftRecord.draftId,
+        status: "draft",
+        draft: nextDraft
+      });
     });
-  });
+  } catch (error) {
+    return rollbackCommandError(error, dependencies);
+  }
 };

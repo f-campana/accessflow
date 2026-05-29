@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const requestedStudyRoles = ["viewer", "analyst"] as const;
+import { requestedStudyRoles } from "@accessflow/workflow";
 
 const optionalDraftText = (max: number) =>
   z

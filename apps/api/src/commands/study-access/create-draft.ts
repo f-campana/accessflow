@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
+  conflict,
   err,
   fromZod,
   notFound,
@@ -9,6 +10,10 @@ import {
   type AppError,
   type Result
 } from "@accessflow/core";
+import {
+  activeStudyAccessRequestStatuses,
+  type StudyAccessRequestStatus
+} from "@accessflow/workflow";
 
 import type { AuthenticatedActor } from "../../context";
 import {
@@ -17,6 +22,7 @@ import {
   studyAccessRequests
 } from "../../db/schema";
 import { createDraftInputSchema } from "../validation";
+import type { CommandDependencies } from "../types";
 import { ensureRequester } from "./authorization";
 import {
   abortCommand,
@@ -25,10 +31,89 @@ import {
 } from "./command-transaction";
 import { definedDraftValues } from "./draft-fields";
 
+const activeRequestConstraintName =
+  "study_access_requests_active_requester_study_idx";
+
 export type CreateDraftResult = {
   requestId: string;
   draftId: string;
   status: "draft";
+};
+
+type ActiveRequesterStudyRequest = {
+  requestId: string;
+  status: StudyAccessRequestStatus;
+  draftId: string | null;
+};
+
+const readActiveRequesterStudyRequest = async (
+  actorId: string,
+  studyId: string,
+  dependencies: CommandDependencies
+): Promise<ActiveRequesterStudyRequest | null> => {
+  const [activeRequest] = await dependencies.db
+    .select({
+      requestId: studyAccessRequests.id,
+      status: studyAccessRequests.status,
+      draftId: studyAccessRequestDrafts.id
+    })
+    .from(studyAccessRequests)
+    .leftJoin(
+      studyAccessRequestDrafts,
+      eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
+    )
+    .where(
+      and(
+        eq(studyAccessRequests.requesterId, actorId),
+        eq(studyAccessRequests.studyId, studyId),
+        inArray(studyAccessRequests.status, activeStudyAccessRequestStatuses)
+      )
+    )
+    .limit(1);
+
+  return activeRequest ?? null;
+};
+
+const activeRequestResult = (
+  activeRequest: ActiveRequesterStudyRequest
+): Result<CreateDraftResult, AppError> => {
+  if (activeRequest.status !== "draft") {
+    return err(
+      conflict(
+        `Requester already has an active ${activeRequest.status} request for this study`
+      )
+    );
+  }
+
+  if (!activeRequest.draftId) {
+    return err(unexpected("Active draft request is missing its draft"));
+  }
+
+  return ok({
+    requestId: activeRequest.requestId,
+    draftId: activeRequest.draftId,
+    status: "draft"
+  });
+};
+
+const isActiveRequestUniqueViolation = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const maybePgError = error as {
+    code?: unknown;
+    constraint?: unknown;
+    cause?: unknown;
+  };
+
+  const isDirectUniqueViolation =
+    maybePgError.code === "23505" &&
+    maybePgError.constraint === activeRequestConstraintName;
+
+  return (
+    isDirectUniqueViolation || isActiveRequestUniqueViolation(maybePgError.cause)
+  );
 };
 
 export const createDraft = async (
@@ -46,17 +131,27 @@ export const createDraft = async (
     return parsed;
   }
 
-  const [study] = await dependencies.db
-    .select({ id: studies.id })
-    .from(studies)
-    .where(eq(studies.id, parsed.value.studyId))
-    .limit(1);
-
-  if (!study) {
-    return err(notFound("Study not found"));
-  }
-
   try {
+    const [study] = await dependencies.db
+      .select({ id: studies.id })
+      .from(studies)
+      .where(eq(studies.id, parsed.value.studyId))
+      .limit(1);
+
+    if (!study) {
+      return err(notFound("Study not found"));
+    }
+
+    const activeRequest = await readActiveRequesterStudyRequest(
+      actor.id,
+      parsed.value.studyId,
+      dependencies
+    );
+
+    if (activeRequest) {
+      return activeRequestResult(activeRequest);
+    }
+
     return await dependencies.db.transaction(async (tx) => {
       const draftValues = definedDraftValues(parsed.value);
 
@@ -94,6 +189,27 @@ export const createDraft = async (
       });
     });
   } catch (error) {
-    return rollbackCommandError(error);
+    if (isActiveRequestUniqueViolation(error)) {
+      try {
+        const currentActiveRequest = await readActiveRequesterStudyRequest(
+          actor.id,
+          parsed.value.studyId,
+          dependencies
+        );
+
+        if (currentActiveRequest) {
+          return activeRequestResult(currentActiveRequest);
+        }
+
+        return err(
+          conflict("Requester already has an active request for this study")
+        );
+      } catch (readError) {
+        dependencies.reportUnexpectedError(readError);
+        return err(unexpected("Unexpected command failure"));
+      }
+    }
+
+    return rollbackCommandError(error, dependencies);
   }
 };

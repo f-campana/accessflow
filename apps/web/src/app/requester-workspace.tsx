@@ -6,6 +6,11 @@ import {
   authErrorMessageFromBody,
   authErrorMessageFromCaught
 } from "./auth-errors";
+import {
+  commandExceptionError,
+  commandReloadError,
+  refreshRetryError
+} from "./requester-command-errors";
 import { trpc } from "../trpc/client";
 
 type Actor = {
@@ -118,6 +123,7 @@ export function RequesterWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [canRetryRefresh, setCanRetryRefresh] = useState(false);
 
   useEffect(() => {
     setAuthEmail(`requester-${createClientId()}@example.test`);
@@ -137,6 +143,7 @@ export function RequesterWorkspace() {
     setError(null);
     setAuthError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       const currentActor = await trpc.me.query();
@@ -185,6 +192,7 @@ export function RequesterWorkspace() {
     setBusy("Loading request");
     setError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       const nextAccess = await trpc.myStudyAccess.query({ studyId });
@@ -201,8 +209,10 @@ export function RequesterWorkspace() {
 
   const authenticate = async (mode: "sign-up/email" | "sign-in/email") => {
     setBusy(mode === "sign-up/email" ? "Creating account" : "Signing in");
+    setError(null);
     setAuthError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       await requestJson(mode, {
@@ -225,7 +235,9 @@ export function RequesterWorkspace() {
 
   const signOut = async () => {
     setBusy("Signing out");
+    setError(null);
     setAuthError(null);
+    setCanRetryRefresh(false);
 
     try {
       await requestJson("sign-out", {});
@@ -249,6 +261,37 @@ export function RequesterWorkspace() {
     setDraftForm(toDraftForm(nextAccess));
   };
 
+  const refreshAfterCommand = async (
+    reloadError: AppError,
+    nextNotice: string
+  ) => {
+    try {
+      await reloadSelectedStudyAccess();
+      setCanRetryRefresh(false);
+      setNotice(nextNotice);
+    } catch {
+      setError(reloadError);
+      setCanRetryRefresh(true);
+    }
+  };
+
+  const retrySelectedStudyRefresh = async () => {
+    setBusy("Refreshing workspace");
+    setError(null);
+    setNotice(null);
+
+    try {
+      await reloadSelectedStudyAccess();
+      setCanRetryRefresh(false);
+      setNotice("Workspace refreshed.");
+    } catch {
+      setError(refreshRetryError());
+      setCanRetryRefresh(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const createDraft = async () => {
     if (!selectedStudyId) {
       return;
@@ -257,6 +300,7 @@ export function RequesterWorkspace() {
     setBusy("Creating draft");
     setError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       const response = (await trpc.createDraft.mutate({
@@ -268,8 +312,12 @@ export function RequesterWorkspace() {
         return;
       }
 
-      await reloadSelectedStudyAccess();
-      setNotice(`Draft ${compactId(response.value.draftId)} created.`);
+      await refreshAfterCommand(
+        commandReloadError("createDraft"),
+        `Draft ${compactId(response.value.draftId)} created.`
+      );
+    } catch {
+      setError(commandExceptionError("createDraft"));
     } finally {
       setBusy(null);
     }
@@ -283,6 +331,7 @@ export function RequesterWorkspace() {
     setBusy("Saving draft");
     setError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       const response = (await trpc.saveDraft.mutate({
@@ -296,8 +345,12 @@ export function RequesterWorkspace() {
         return;
       }
 
-      await reloadSelectedStudyAccess();
-      setNotice(`Draft ${compactId(response.value.draftId)} saved.`);
+      await refreshAfterCommand(
+        commandReloadError("saveDraft"),
+        `Draft ${compactId(response.value.draftId)} saved.`
+      );
+    } catch {
+      setError(commandExceptionError("saveDraft"));
     } finally {
       setBusy(null);
     }
@@ -311,6 +364,7 @@ export function RequesterWorkspace() {
     setBusy("Submitting request");
     setError(null);
     setNotice(null);
+    setCanRetryRefresh(false);
 
     try {
       const response = (await trpc.submitRequest.mutate({
@@ -325,8 +379,12 @@ export function RequesterWorkspace() {
         return;
       }
 
-      await reloadSelectedStudyAccess();
-      setNotice(`Request ${compactId(response.value.requestId)} submitted.`);
+      await refreshAfterCommand(
+        commandReloadError("submitRequest"),
+        `Request ${compactId(response.value.requestId)} submitted.`
+      );
+    } catch {
+      setError(commandExceptionError("submitRequest"));
     } finally {
       setBusy(null);
     }
@@ -476,7 +534,7 @@ export function RequesterWorkspace() {
                 type="button"
                 className="primary-button"
                 onClick={() => void createDraft()}
-                disabled={Boolean(busy)}
+                disabled={Boolean(busy) || canRetryRefresh}
               >
                 Create request draft
               </button>
@@ -501,6 +559,15 @@ export function RequesterWorkspace() {
                 {error.formErrors?.map((formError) => (
                   <span key={formError}>{formError}</span>
                 ))}
+                {canRetryRefresh ? (
+                  <button
+                    type="button"
+                    onClick={() => void retrySelectedStudyRefresh()}
+                    disabled={Boolean(busy)}
+                  >
+                    Retry refresh
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -596,14 +663,18 @@ export function RequesterWorkspace() {
                   <button
                     type="button"
                     onClick={() => void saveDraft()}
-                    disabled={!draftId || !isDraft || Boolean(busy)}
+                    disabled={
+                      !draftId || !isDraft || Boolean(busy) || canRetryRefresh
+                    }
                   >
                     Save draft
                   </button>
                   <button
                     type="submit"
                     className="primary-button"
-                    disabled={!draftId || !isDraft || Boolean(busy)}
+                    disabled={
+                      !draftId || !isDraft || Boolean(busy) || canRetryRefresh
+                    }
                   >
                     Submit request
                   </button>

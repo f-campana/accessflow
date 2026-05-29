@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createTestActor,
@@ -6,6 +6,7 @@ import {
   resetDatabase
 } from "../../test-helpers/db";
 import { createDraft } from "./create-draft";
+import { defaultDependencies } from "./command-transaction";
 import { saveDraft } from "./save-draft";
 import { submitRequest } from "./submit-request";
 import { validSubmission } from "./test-data";
@@ -97,5 +98,35 @@ describe("saveDraft", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("InvalidTransition");
     }
+  });
+
+  it("normalizes unexpected dependency failures", async () => {
+    const actor = await createTestActor();
+    const failure = new Error("database unavailable");
+    const reportUnexpectedError = vi.fn();
+
+    const result = await saveDraft(
+      actor,
+      {
+        draftId: crypto.randomUUID(),
+        purpose: "Attempted update"
+      },
+      {
+        ...defaultDependencies,
+        db: {
+          transaction: async () => {
+            throw failure;
+          }
+        } as unknown as typeof defaultDependencies.db,
+        reportUnexpectedError
+      }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("Unexpected");
+      expect(result.error.message).toBe("Unexpected command failure");
+    }
+    expect(reportUnexpectedError).toHaveBeenCalledWith(failure);
   });
 });

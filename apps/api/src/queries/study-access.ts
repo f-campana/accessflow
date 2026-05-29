@@ -1,4 +1,5 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { activeStudyAccessRequestStatuses } from "@accessflow/workflow";
 
 import type { AuthenticatedActor } from "../context";
 import { db } from "../db/client";
@@ -83,10 +84,10 @@ export const getRequesterStudyAccess = async (
     .where(
       and(
         eq(studyAccessRequests.requesterId, actor.id),
-        eq(studyAccessRequests.studyId, studyId)
+        eq(studyAccessRequests.studyId, studyId),
+        inArray(studyAccessRequests.status, activeStudyAccessRequestStatuses)
       )
     )
-    .orderBy(desc(studyAccessRequests.createdAt))
     .limit(1);
 
   if (!request) {

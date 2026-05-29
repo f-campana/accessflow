@@ -9,7 +9,8 @@ Read these files before making non-trivial changes:
 1. `README.md`
 2. `docs/00-product/accessflow-workflow-brief.md`
 3. `docs/30-quality/repo-quality-gate.md`
-4. This `AGENTS.md`
+4. `docs/40-review/requester-workflow-hardening-todo.md`
+5. This `AGENTS.md`
 
 The central product invariant is:
 
@@ -119,6 +120,7 @@ API tests use an isolated `accessflow_test` database by default. Do not bypass `
 
 - The worktree may already contain changes from another Codex thread or the user. Never revert changes you did not make.
 - Keep edits scoped to the requested pass.
+- When working through the requester hardening backlog, handle one todo item per pass unless the user explicitly expands scope.
 - Do not commit or push unless explicitly asked.
 - Prefer small, reviewable changes with clear final reports.
 - Avoid storing prompt transcripts, scratch reports, or agent process artifacts in the repo unless explicitly requested.
