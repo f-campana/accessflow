@@ -534,7 +534,7 @@ Plain summary: field errors now belong only to validation errors. Other errors, 
 
 Lesson: typed error codes are strongest when each code has its own shape. A broad optional bag is flexible, but it makes impossible states look normal and pushes defensive checks into every UI.
 
-### 26. [ ] Add Error Focus And Live-Region Behavior
+### 26. [x] Add Error Focus And Live-Region Behavior
 
 Issue: validation errors render near fields, but focus stays wherever the user was. The loading/status line is visible but is not consistently announced.
 
@@ -547,6 +547,12 @@ Done when:
 - failed submit moves focus to an error summary or first invalid field
 - loading/saving/submitting status changes are announced
 - browser or Playwright coverage proves the focus behavior
+
+Completed 2026-06-03: added a focusable requester validation summary, linked each validation field error back to its input, and focused that summary when a `ValidationError` appears. The operation status line now uses a polite status region, the main app shell exposes `aria-busy`, and the request panel/form expose busy state during draft commands. Also normalized missing requested-role submit errors to the product message. Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `git diff --check`, and Browser-rendered validation flow on `http://localhost:3000` with no console warnings/errors.
+
+Plain summary: after an invalid submit, focus now moves to the error summary instead of staying wherever the user was. Screen reader users also get polite operation updates, and the page exposes when workflow commands are busy.
+
+Lesson: rendering an error is not enough. The UI also has to move attention to the new problem and announce important state changes without requiring users to visually scan the whole page.
 
 ### 27. [ ] Sanitize Command Error Copy At The Web Boundary
 

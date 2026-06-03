@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, type RefObject } from "react";
+
 import type {
   Actor,
   AppError,
@@ -7,7 +9,6 @@ import type {
   Study,
   StudyAccess
 } from "./requester-workspace-model";
-import type { FieldErrors } from "@accessflow/core";
 import {
   parseRequestedStudyRole,
   requestedStudyRoles,
@@ -15,7 +16,11 @@ import {
 } from "@accessflow/workflow";
 import {
   draftFieldAccessibilityProps,
+  draftErrorSummaryId,
+  draftErrorSummaryTitleId,
+  draftFieldErrorSummaryItems,
   draftFieldErrorId,
+  firstDraftFieldError,
   type DraftFieldName
 } from "./requester-field-accessibility";
 import { appErrorTitle } from "./requester-error-copy";
@@ -258,9 +263,23 @@ export function RequestPanel({
   onUpdateDraft
 }: RequestPanelProps) {
   const validationError = error?.code === "ValidationError" ? error : null;
+  const fieldErrorSummaryItems = draftFieldErrorSummaryItems(
+    validationError?.fieldErrors
+  );
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (validationError) {
+      errorSummaryRef.current?.focus();
+    }
+  }, [validationError]);
 
   return (
-    <section className="panel request-panel" aria-labelledby="request-title">
+    <section
+      className="panel request-panel"
+      aria-busy={draftCommandInFlight}
+      aria-labelledby="request-title"
+    >
       <div className="section-heading">
         <div>
           <p className="eyebrow">Requester form</p>
@@ -275,7 +294,9 @@ export function RequestPanel({
         busy={busy}
         canRetryRefresh={canRetryRefresh}
         error={error}
+        fieldErrorSummaryItems={fieldErrorSummaryItems}
         onRetryRefresh={onRetryRefresh}
+        summaryRef={errorSummaryRef}
       />
 
       {!access ? (
@@ -297,7 +318,10 @@ export function RequestPanel({
             <textarea
               {...draftFieldAccessibilityProps({
                 field: "purpose",
-                error: firstFieldError(validationError?.fieldErrors, "purpose")
+                error: firstDraftFieldError(
+                  validationError?.fieldErrors,
+                  "purpose"
+                )
               })}
               value={draftForm.purpose}
               onChange={(event) => onUpdateDraft("purpose", event.target.value)}
@@ -306,7 +330,10 @@ export function RequestPanel({
             />
             <FieldError
               field="purpose"
-              error={firstFieldError(validationError?.fieldErrors, "purpose")}
+              error={firstDraftFieldError(
+                validationError?.fieldErrors,
+                "purpose"
+              )}
             />
           </label>
 
@@ -315,7 +342,7 @@ export function RequestPanel({
             <select
               {...draftFieldAccessibilityProps({
                 field: "requestedRole",
-                error: firstFieldError(
+                error: firstDraftFieldError(
                   validationError?.fieldErrors,
                   "requestedRole"
                 )
@@ -338,7 +365,7 @@ export function RequestPanel({
             </select>
             <FieldError
               field="requestedRole"
-              error={firstFieldError(
+              error={firstDraftFieldError(
                 validationError?.fieldErrors,
                 "requestedRole"
               )}
@@ -350,7 +377,7 @@ export function RequestPanel({
             <textarea
               {...draftFieldAccessibilityProps({
                 field: "justification",
-                error: firstFieldError(
+                error: firstDraftFieldError(
                   validationError?.fieldErrors,
                   "justification"
                 )
@@ -364,7 +391,7 @@ export function RequestPanel({
             />
             <FieldError
               field="justification"
-              error={firstFieldError(
+              error={firstDraftFieldError(
                 validationError?.fieldErrors,
                 "justification"
               )}
@@ -376,7 +403,7 @@ export function RequestPanel({
             <input
               {...draftFieldAccessibilityProps({
                 field: "affiliation",
-                error: firstFieldError(
+                error: firstDraftFieldError(
                   validationError?.fieldErrors,
                   "affiliation"
                 )
@@ -389,7 +416,7 @@ export function RequestPanel({
             />
             <FieldError
               field="affiliation"
-              error={firstFieldError(
+              error={firstDraftFieldError(
                 validationError?.fieldErrors,
                 "affiliation"
               )}
@@ -442,14 +469,18 @@ type CommandErrorProps = {
   busy: boolean;
   canRetryRefresh: boolean;
   error: AppError | null;
+  fieldErrorSummaryItems: ReturnType<typeof draftFieldErrorSummaryItems>;
   onRetryRefresh: () => void;
+  summaryRef: RefObject<HTMLDivElement | null>;
 };
 
 function CommandError({
   busy,
   canRetryRefresh,
   error,
-  onRetryRefresh
+  fieldErrorSummaryItems,
+  onRetryRefresh,
+  summaryRef
 }: CommandErrorProps) {
   if (!error) {
     return null;
@@ -458,12 +489,36 @@ function CommandError({
   const formErrors = error.code === "ValidationError" ? error.formErrors : [];
 
   return (
-    <div className="command-error" role="alert">
-      <strong>{appErrorTitle(error)}</strong>
+    <div
+      ref={summaryRef}
+      className="command-error"
+      id={draftErrorSummaryId}
+      role="alert"
+      tabIndex={-1}
+      aria-labelledby={draftErrorSummaryTitleId}
+    >
+      <strong id={draftErrorSummaryTitleId}>{appErrorTitle(error)}</strong>
       <span>{error.message}</span>
       {formErrors.map((formError) => (
         <span key={formError}>{formError}</span>
       ))}
+      {fieldErrorSummaryItems.length > 0 ? (
+        <ul className="error-summary-list">
+          {fieldErrorSummaryItems.map((item) => (
+            <li key={item.field}>
+              <a
+                href={`#${item.inputId}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById(item.inputId)?.focus();
+                }}
+              >
+                {item.label}: {item.message}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {canRetryRefresh ? (
         <button type="button" onClick={onRetryRefresh} disabled={busy}>
           Retry refresh
@@ -514,11 +569,6 @@ export function AuditTimelinePanel({ access }: AuditTimelinePanelProps) {
     </section>
   );
 }
-
-const firstFieldError = (
-  fieldErrors: FieldErrors<DraftFieldName> | undefined,
-  field: keyof DraftForm
-) => fieldErrors?.[field]?.[0] ?? null;
 
 function FieldError({
   error,

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  draftFieldErrorSummaryItems,
   draftFieldAccessibilityProps,
   draftFieldErrorId,
   draftFieldInputId,
+  firstDraftFieldError,
   isRequiredSubmissionField
 } from "./requester-field-accessibility";
 
@@ -47,5 +49,46 @@ describe("requester field accessibility", () => {
     expect(isRequiredSubmissionField("justification")).toBe(true);
     expect(isRequiredSubmissionField("affiliation")).toBe(true);
     expect(isRequiredSubmissionField("supportingNotes")).toBe(false);
+  });
+
+  it("builds ordered field-error summary items", () => {
+    expect(
+      draftFieldErrorSummaryItems({
+        affiliation: ["Affiliation is required"],
+        purpose: ["Purpose is required"],
+        requestedRole: ["Requested role is required"]
+      })
+    ).toEqual([
+      {
+        field: "purpose",
+        inputId: "request-purpose",
+        label: "Purpose",
+        message: "Purpose is required"
+      },
+      {
+        field: "requestedRole",
+        inputId: "request-requestedRole",
+        label: "Requested role",
+        message: "Requested role is required"
+      },
+      {
+        field: "affiliation",
+        inputId: "request-affiliation",
+        label: "Affiliation",
+        message: "Affiliation is required"
+      }
+    ]);
+  });
+
+  it("reads the first message for a draft field", () => {
+    expect(
+      firstDraftFieldError(
+        {
+          justification: ["First", "Second"]
+        },
+        "justification"
+      )
+    ).toBe("First");
+    expect(firstDraftFieldError(undefined, "justification")).toBeNull();
   });
 });

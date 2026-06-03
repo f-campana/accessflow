@@ -57,11 +57,32 @@ test("requester can submit a durable study access request", async ({ page }) => 
 
   await page.getByRole("button", { name: "Submit request" }).click();
 
+  const errorSummary = page.locator("#request-error-summary");
+  await expect(errorSummary).toBeFocused();
+  await expect(errorSummary).toHaveAttribute("role", "alert");
+  await expect(errorSummary).toHaveAttribute(
+    "aria-labelledby",
+    "request-error-summary-title"
+  );
   await expect(page.getByText("Review the highlighted fields")).toBeVisible();
-  await expect(page.getByText("Purpose is required")).toBeVisible();
-  await expect(page.getByText("Requested role is required")).toBeVisible();
-  await expect(page.getByText("Justification is required")).toBeVisible();
-  await expect(page.getByText("Affiliation is required")).toBeVisible();
+  await expect(
+    errorSummary.getByRole("link", { name: "Purpose: Purpose is required" })
+  ).toBeVisible();
+  await expect(
+    errorSummary.getByRole("link", {
+      name: "Requested role: Requested role is required"
+    })
+  ).toBeVisible();
+  await expect(page.getByText("Purpose is required", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Requested role is required", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText("Justification is required", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText("Affiliation is required", { exact: true })
+  ).toBeVisible();
   await expect(page.getByLabel("Purpose")).toHaveAttribute(
     "aria-describedby",
     "request-purpose-error"
@@ -81,6 +102,13 @@ test("requester can submit a durable study access request", async ({ page }) => 
     "Requested role is required"
   );
 
+  await errorSummary
+    .getByRole("link", {
+      name: "Requested role: Requested role is required"
+    })
+    .click();
+  await expect(page.getByLabel("Requested role")).toBeFocused();
+
   await page
     .getByLabel("Purpose")
     .fill("Evaluate aggregate cardiometabolic workspace access.");
@@ -92,6 +120,30 @@ test("requester can submit a durable study access request", async ({ page }) => 
   await page
     .getByLabel("Supporting notes")
     .fill("Executable browser coverage for the requester workflow.");
+
+  await page.route("**/trpc/saveDraft**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  await page.getByRole("button", { name: "Save draft" }).click();
+  const statusLine = page.locator(".status-line");
+  await expect(statusLine).toHaveAttribute("role", "status");
+  await expect(statusLine).toHaveAttribute("aria-live", "polite");
+  await expect(statusLine).toHaveAttribute("aria-atomic", "true");
+  await expect(statusLine).toHaveText("Saving draft");
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator(".request-panel")).toHaveAttribute(
+    "aria-busy",
+    "true"
+  );
+  await expect(page.locator(".request-form")).toHaveAttribute(
+    "aria-busy",
+    "true"
+  );
+  await expect(page.getByText(/Draft .+ saved\./)).toBeVisible();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await page.unroute("**/trpc/saveDraft**");
 
   await page.getByRole("button", { name: "Submit request" }).click();
 

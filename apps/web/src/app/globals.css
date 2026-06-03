@@ -362,11 +362,28 @@ label {
   padding: 12px;
 }
 
+.command-error:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  outline-offset: 2px;
+}
+
 .command-error button {
   justify-self: start;
   margin-top: 6px;
   background: #ffffff;
   color: var(--danger);
+}
+
+.error-summary-list {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.error-summary-list a {
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .field-error {

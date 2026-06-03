@@ -36,4 +36,20 @@ describe("command validation requested roles", () => {
     expect(draftResult.success).toBe(false);
     expect(finalResult.success).toBe(false);
   });
+
+  it("uses product copy when final requested role is missing", () => {
+    const result = finalDraftFieldsSchema.safeParse({
+      purpose: "Analyze synthetic outcomes",
+      requestedRole: null,
+      justification: "Reviewer needs aggregate data",
+      affiliation: "AccessFlow Research"
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.requestedRole).toEqual([
+        "Requested role is required"
+      ]);
+    }
+  });
 });

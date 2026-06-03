@@ -14,7 +14,7 @@ export function RequesterWorkspace() {
   const { actions } = controller;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" aria-busy={controller.operationActive}>
       <RequesterHeader
         actor={controller.actor}
         busy={controller.operationActive}
@@ -22,10 +22,17 @@ export function RequesterWorkspace() {
       />
 
       {controller.operationStatus ? (
-        <p className="status-line">{controller.operationStatus}</p>
+        <p
+          className="status-line"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {controller.operationStatus}
+        </p>
       ) : null}
       {controller.notice ? (
-        <p className="notice" role="status">
+        <p className="notice" role="status" aria-atomic="true">
           {controller.notice}
         </p>
       ) : null}

@@ -21,21 +21,24 @@ const requiredSubmissionText = (fieldName: string, max: number) =>
     .min(1, `${fieldName} is required`)
     .max(max);
 
-const requestedStudyRoleInputSchema = z
-  .string()
-  .trim()
-  .refine(isRequestedStudyRole, {
-    error: "Requested role is required"
-  })
-  .transform((value): RequestedStudyRole => {
-    const role = parseRequestedStudyRole(value);
+const requestedStudyRoleInputSchema = z.preprocess(
+  (value) => (value === null || value === undefined ? "" : value),
+  z
+    .string()
+    .trim()
+    .refine(isRequestedStudyRole, {
+      error: "Requested role is required"
+    })
+    .transform((value): RequestedStudyRole => {
+      const role = parseRequestedStudyRole(value);
 
-    if (!role) {
-      throw new Error("Requested role parser rejected refined value");
-    }
+      if (!role) {
+        throw new Error("Requested role parser rejected refined value");
+      }
 
-    return role;
-  });
+      return role;
+    })
+);
 
 export const draftFieldsSchema = z.object({
   purpose: optionalDraftText(1_000),
