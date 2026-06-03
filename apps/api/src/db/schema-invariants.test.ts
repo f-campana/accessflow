@@ -23,6 +23,18 @@ const expectConstraintViolation = async (
   });
 };
 
+const expectForeignKeyViolation = async (
+  operation: Promise<unknown>,
+  constraint: string
+) => {
+  await expect(operation).rejects.toMatchObject({
+    cause: {
+      code: "23503",
+      constraint
+    }
+  });
+};
+
 describe("database workflow invariants", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -122,6 +134,33 @@ describe("database workflow invariants", () => {
         requestedRole: "admin"
       }),
       "study_access_request_drafts_requested_role_check"
+    );
+  });
+
+  it("rejects drafts owned by a user other than the request requester", async () => {
+    const requester = await createTestActor();
+    const otherActor = await createTestActor();
+    const study = await createTestStudy();
+
+    const [request] = await db
+      .insert(studyAccessRequests)
+      .values({
+        requesterId: requester.id,
+        studyId: study.id,
+        status: "draft"
+      })
+      .returning({ id: studyAccessRequests.id });
+
+    if (!request) {
+      throw new Error("Expected request fixture");
+    }
+
+    await expectForeignKeyViolation(
+      db.insert(studyAccessRequestDrafts).values({
+        requestId: request.id,
+        ownerId: otherActor.id
+      }),
+      "study_access_request_drafts_request_owner_fk"
     );
   });
 });

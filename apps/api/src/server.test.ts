@@ -52,6 +52,15 @@ type CreateDraftHttpResponse =
       };
     };
 
+type CommandValidationFailure = {
+  ok: false;
+  error: {
+    code: "ValidationError";
+    message: string;
+    fieldErrors?: Record<string, string[]>;
+  };
+};
+
 const readTrpcData = <T>(response: { json: () => unknown }): T => {
   const [envelope] = response.json() as TrpcSuccessEnvelope<T>;
 
@@ -100,6 +109,35 @@ const signUpRequester = async (server: FastifyInstance) => {
     email,
     cookieHeader
   };
+};
+
+const expectCommandValidationFailure = async (
+  server: FastifyInstance,
+  cookieHeader: string,
+  procedure: "createDraft" | "saveDraft" | "submitRequest",
+  payload: unknown
+) => {
+  const response = await server.inject({
+    method: "POST",
+    url: `/trpc/${procedure}?batch=1`,
+    headers: {
+      "content-type": "application/json",
+      cookie: cookieHeader
+    },
+    payload: {
+      0: payload
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  expect(readTrpcData<CommandValidationFailure>(response)).toEqual(
+    expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({
+        code: "ValidationError"
+      })
+    })
+  );
 };
 
 describe("api server", () => {
@@ -229,5 +267,20 @@ describe("api server", () => {
         })
       })
     );
+  });
+
+  it("returns typed command validation errors for malformed tRPC command input", async () => {
+    const { cookieHeader } = await signUpRequester(server);
+
+    await expectCommandValidationFailure(server, cookieHeader, "createDraft", {
+      studyId: "not-a-study-id"
+    });
+    await expectCommandValidationFailure(server, cookieHeader, "saveDraft", {
+      draftId: "not-a-draft-id"
+    });
+    await expectCommandValidationFailure(server, cookieHeader, "submitRequest", {
+      draftId: "not-a-draft-id",
+      idempotencyKey: "short"
+    });
   });
 });

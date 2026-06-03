@@ -110,6 +110,7 @@ export const submitRequest = async (
           draftId: studyAccessRequestDrafts.id,
           requestId: studyAccessRequestDrafts.requestId,
           ownerId: studyAccessRequestDrafts.ownerId,
+          requesterId: studyAccessRequests.requesterId,
           status: studyAccessRequests.status,
           purpose: studyAccessRequestDrafts.purpose,
           requestedRole: studyAccessRequestDrafts.requestedRole,
@@ -130,7 +131,10 @@ export const submitRequest = async (
         return abortCommand(notFound("Draft not found"));
       }
 
-      if (draftRecord.ownerId !== actor.id) {
+      if (
+        draftRecord.requesterId !== actor.id ||
+        draftRecord.ownerId !== actor.id
+      ) {
         return abortCommand(forbidden("Cannot submit another requester's draft"));
       }
 

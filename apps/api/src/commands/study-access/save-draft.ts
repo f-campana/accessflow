@@ -54,6 +54,7 @@ export const saveDraft = async (
           draftId: studyAccessRequestDrafts.id,
           requestId: studyAccessRequestDrafts.requestId,
           ownerId: studyAccessRequestDrafts.ownerId,
+          requesterId: studyAccessRequests.requesterId,
           status: studyAccessRequests.status,
           purpose: studyAccessRequestDrafts.purpose,
           requestedRole: studyAccessRequestDrafts.requestedRole,
@@ -74,7 +75,10 @@ export const saveDraft = async (
         return err(notFound("Draft not found"));
       }
 
-      if (draftRecord.ownerId !== actor.id) {
+      if (
+        draftRecord.requesterId !== actor.id ||
+        draftRecord.ownerId !== actor.id
+      ) {
         return err(forbidden("Cannot update another requester's draft"));
       }
 

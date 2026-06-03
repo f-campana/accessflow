@@ -4,6 +4,7 @@ import {
   check,
   index,
   jsonb,
+  foreignKey,
   pgEnum,
   pgTable,
   text,
@@ -159,6 +160,10 @@ export const studyAccessRequests = pgTable(
   },
   (table) => ({
     requesterIdx: index("study_access_requests_requester_idx").on(table.requesterId),
+    idRequesterIdx: uniqueIndex("study_access_requests_id_requester_idx").on(
+      table.id,
+      table.requesterId
+    ),
     studyIdx: index("study_access_requests_study_idx").on(table.studyId),
     statusIdx: index("study_access_requests_status_idx").on(table.status),
     requestedRoleCheck: check(
@@ -218,6 +223,11 @@ export const studyAccessRequestDrafts = pgTable(
   (table) => ({
     requestIdx: uniqueIndex("study_access_request_drafts_request_idx").on(table.requestId),
     ownerIdx: index("study_access_request_drafts_owner_idx").on(table.ownerId),
+    requestOwnerFk: foreignKey({
+      columns: [table.requestId, table.ownerId],
+      foreignColumns: [studyAccessRequests.id, studyAccessRequests.requesterId],
+      name: "study_access_request_drafts_request_owner_fk"
+    }),
     requestedRoleCheck: check(
       "study_access_request_drafts_requested_role_check",
       sql`${table.requestedRole} is null or ${table.requestedRole} in (${sqlStringList(

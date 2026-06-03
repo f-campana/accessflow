@@ -304,9 +304,239 @@ Plain summary: the docs no longer read like reviewer/admin flows are already imp
 
 Lesson: roadmap docs are useful only when they do not blur into implementation status. Future agents need one immediate source of truth, otherwise they will start the wrong work.
 
+## Post-Hardening Review Backlog
+
+This backlog comes from the 2026-06-03 multi-agent review against the local backend, data-structures, React, TypeScript, and JavaScript guidance docs. One agent explicitly used the `thermo-nuclear-code-quality-review` skill.
+
+Process these items one at a time, in order, unless a later item becomes urgent. After each pass, keep using the close-out shape from the working rule: `Completed`, `Plain summary`, and `Lesson`.
+
+### 15. [x] Tie Draft Ownership To The Request Requester
+
+Issue: `study_access_request_drafts.request_id` and `owner_id` are independent foreign keys. Commands authorize against `draft.ownerId`, but the database does not prove that the draft owner is the same user as the parent request requester.
+
+Why it matters: a bad migration, script, or future admin tool could create a draft owned by user B for user A's request. User B could then save or submit a request that belongs to user A.
+
+Fix direction: enforce that `(draft.request_id, draft.owner_id)` matches `(request.id, request.requester_id)` with a composite foreign key or equivalent database constraint. Also select the parent request requester in save/submit command reads and assert `requesterId === actor.id`.
+
+Done when:
+
+- invalid request/draft ownership pairs are rejected at the database boundary
+- save and submit authorize against the parent request requester, not only the draft owner
+- direct schema-invariant tests cover mismatched draft ownership
+
+Completed 2026-06-03: added a composite request/requester unique index, added a draft `(request_id, owner_id)` foreign key to the parent request `(id, requester_id)`, generated migration `0003_flimsy_pyro.sql`, selected parent `requesterId` in save/submit draft reads, and made save/submit reject rows whose parent requester or draft owner does not match the actor. Added a direct database invariant test proving a draft owned by another user cannot attach to the request. Verification: `pnpm --filter @accessflow/api test`.
+
+Plain summary: a draft can no longer claim one owner while pointing at another user's request. The database now rejects that impossible relationship, and the command code checks the parent request requester before saving or submitting.
+
+Lesson: authorization should follow the durable parent record, not only a convenient child row. If a child row says who owns it, the database should prove that ownership matches the parent workflow object.
+
+### 16. [x] Preserve The Typed Command Error Contract Through tRPC
+
+Issue: tRPC procedures use `.input(...)` before calling command services. Bad input can fail in the tRPC adapter with a transport `BAD_REQUEST` instead of returning the command shape `{ ok: false, error: { code: "ValidationError" } }`.
+
+Why it matters: AccessFlow is practicing typed command boundaries. If expected validation failures sometimes return command errors and sometimes throw transport errors, the web UI has two error contracts to understand.
+
+Fix direction: either add a command-procedure adapter that passes unknown input into command services and always returns typed command responses for expected failures, or explicitly document and test the intended split between transport validation and command validation.
+
+Done when:
+
+- malformed command input through `/trpc` has a deliberate, tested response shape
+- the web UI knows whether validation errors come from command responses, transport errors, or both
+- docs explain the chosen boundary in simple terms
+
+Decision: tRPC command mutations are authenticated transport adapters. They accept raw transport input and pass it into command services. Command services own command input validation and return typed command responses for expected validation failures. Query procedures may still use tRPC input validation because they are read adapters, not workflow commands.
+
+Completed 2026-06-03: replaced command mutation `.input(...)` schemas with one authenticated command procedure that accepts unknown transport input, so `createDraft`, `saveDraft`, and `submitRequest` all route expected input validation through the command services. Added HTTP-level `/trpc` tests proving malformed command payloads return `200` with `{ ok: false, error: { code: "ValidationError" } }` instead of tRPC `BAD_REQUEST`. Verification: `pnpm --filter @accessflow/api test`.
+
+Plain summary: command validation now comes from the command layer, not from the tRPC adapter. The UI can treat expected command input problems as normal command results.
+
+Lesson: adapters should not steal business-rule errors from the application layer. For workflow commands, transport should authenticate and deliver input; the command should validate, decide, and return the typed result.
+
+### 17. [ ] Lock Draft Fields While Refresh Retry Is Required
+
+Issue: after a command may have committed but the UI failed to reload, Save and Submit are disabled, but draft fields remain editable.
+
+Why it matters: the UI tells the user to refresh before continuing, yet still lets them type into stale local state. Those edits may be overwritten when refresh succeeds.
+
+Fix direction: include `canRetryRefresh` in the draft edit lock. Prefer one view-model value such as `canEditDraftFields` instead of repeating `!isDraft || draftCommandInFlight || canRetryRefresh` across fields.
+
+Done when:
+
+- draft fields are disabled while a retry-refresh banner is active
+- the disabled reason remains clear to the user
+- tests cover the retry-refresh edit-lock path
+
+### 18. [ ] Replace Stringly Busy State With Typed Operation State
+
+Issue: `RequesterWorkspace` stores `busy` as user-facing strings like `"Saving draft"`, and edit-lock logic depends on those exact labels.
+
+Why it matters: copy should not control behavior. A wording change can silently break save/submit locking without a type error.
+
+Fix direction: replace `busy: string | null` with a typed operation state such as `idle`, `loadingWorkspace`, `loadingRequest`, `creatingDraft`, `savingDraft`, `submittingRequest`, `refreshingWorkspace`, `authenticating`, or `signingOut`. Map operation state to display copy separately.
+
+Done when:
+
+- behavioral checks use typed operation kinds, not strings
+- status-line copy is derived from operation state
+- tests prove save/submit edit locking does not depend on wording
+
+### 19. [ ] Add Audit Event Transition Constraints
+
+Issue: audit events are constrained to enum values, but not to legal event/from/to triples. The database would accept impossible audit facts such as `submitRequest` from `submitted` to `submitted`.
+
+Why it matters: the audit timeline is durable product truth, not decoration. If scripts or future commands can write impossible audit rows, the UI can faithfully render false history.
+
+Fix direction: add a database check for the currently implemented audit vocabulary, starting with `submitRequest => draft -> submitted`. Keep the constraint small and expand it when review/admin transitions are implemented.
+
+Done when:
+
+- impossible audit event triples are rejected by the database
+- direct schema-invariant tests cover invalid audit transitions
+- submit still writes the legal audit row in the same transaction
+
+### 20. [ ] Define And Enforce Idempotency Expiry Semantics
+
+Issue: idempotency rows have `expiresAt`, but replay lookup ignores it. Keys currently replay or conflict forever.
+
+Why it matters: storing an expiry without enforcing it creates a false contract. Either keys expire or they do not.
+
+Fix direction: decide the v1 rule. Prefer rejecting expired keys with a typed `Conflict` and allowing a new key for a new attempt. If permanent keys are intentional, remove or rename the expiry field.
+
+Done when:
+
+- expired idempotency keys have a documented behavior
+- submit replay tests cover expired same-payload and expired different-payload keys
+- the schema and command code tell the same story
+
+### 21. [ ] Extract A Requester Workspace Controller Hook
+
+Issue: `RequesterWorkspace` still owns session bootstrap, study selection, async guards, command execution, refresh retry policy, submit idempotency reconciliation, error state, and draft form state.
+
+Why it matters: the panels are presentational now, but the parent is still a large workflow controller. Adding reviewer/admin or more requester states will make it harder to reason about React synchronization.
+
+Fix direction: extract a `useRequesterWorkspaceController` hook or reducer-driven controller. Keep rendering in `RequesterWorkspace`, but move orchestration, async guards, refresh retry, submit attempts, and command execution into a testable controller.
+
+Done when:
+
+- `RequesterWorkspace` reads as wiring/rendering rather than implementation detail
+- controller state transitions are unit-tested without rendering the full page
+- existing Playwright requester workflow still passes
+
+### 22. [ ] Extract Canonical Draft Read And Patch Helpers
+
+Issue: `saveDraft` and `submitRequest` both manually rebuild the owned-draft joined row shape and repeat parts of ownership/status/draft parsing.
+
+Why it matters: duplicated persistence plumbing makes future workflow commands easier to drift. Command files should express policy, not column wiring.
+
+Fix direction: extract a canonical `readRequesterDraftForUpdate` helper and shared draft patch helpers. Keep command-specific policy in command files.
+
+Done when:
+
+- save and submit share one locked draft read shape
+- ownership/status checks are easier to scan
+- existing save/submit command tests still pass
+
+### 23. [ ] Remove Duplicate Workflow Transition Sources
+
+Issue: the workflow package stores transitions in `workflowTransitions` and repeats them in the XState machine, then casts `nextSnapshot.value` back to `StudyAccessRequestStatus`.
+
+Why it matters: two transition graphs can drift. The cast can hide that drift from TypeScript.
+
+Fix direction: choose one source of truth. Either derive transitions from the machine, or use a typed transition table until XState earns its complexity. If XState stays, add an invariant test that machine states match `studyAccessRequestStatuses`.
+
+Done when:
+
+- transition legality has one canonical source
+- no cast is needed to trust the next status
+- workflow tests prove state vocabulary and transition vocabulary stay aligned
+
+### 24. [ ] Reuse One Requested Role Parser Everywhere
+
+Issue: requested-role parsing is duplicated. Query mapping casts through `includes`, while persisted draft parsing hardcodes `z.enum(["viewer", "analyst"])`.
+
+Why it matters: adding a role could update validation but not persisted read parsing, or vice versa.
+
+Fix direction: export one `requestedStudyRoleSchema` or `isRequestedStudyRole` from `packages/workflow` and reuse it in validation, query mapping, draft parsing, and web select parsing.
+
+Done when:
+
+- no requester-role parser hardcodes a second role list
+- invalid persisted roles still fail safely
+- tests cover the shared parser
+
+### 25. [ ] Make `AppError` A Real Discriminated Union
+
+Issue: `AppError` allows `formErrors` and `fieldErrors` on every error code. Non-validation errors can carry field errors, and validation errors can omit them.
+
+Why it matters: invalid error states are representable, so UI code must defensively handle combinations that should not exist.
+
+Fix direction: model `AppError` as a discriminated union keyed by `code`. Let `ValidationError` carry typed field/form errors, while other errors carry only their relevant fields.
+
+Done when:
+
+- TypeScript rejects field errors on non-validation errors
+- requester field errors use a field vocabulary instead of arbitrary strings where practical
+- command and UI tests still prove friendly error rendering
+
+### 26. [ ] Add Error Focus And Live-Region Behavior
+
+Issue: validation errors render near fields, but focus stays wherever the user was. The loading/status line is visible but is not consistently announced.
+
+Why it matters: keyboard and screen reader users may not discover what changed after submit or why controls became disabled.
+
+Fix direction: add focus-to-error behavior after `ValidationError`, ideally through an error summary that links to invalid fields. Add `role="status"` or `aria-live="polite"` to operation status copy and expose busy state on the relevant section or main region.
+
+Done when:
+
+- failed submit moves focus to an error summary or first invalid field
+- loading/saving/submitting status changes are announced
+- browser or Playwright coverage proves the focus behavior
+
+### 27. [ ] Sanitize Command Error Copy At The Web Boundary
+
+Issue: command errors render `error.message` and `formErrors` directly from the API. Auth errors already have a safe-copy mapper, but command errors do not.
+
+Why it matters: future backend messages may contain implementation wording that is useful for logs but not polished or safe for users.
+
+Fix direction: add a command-error copy mapper by `AppError["code"]`. Render raw server text only where explicitly whitelisted, such as field-level validation messages.
+
+Done when:
+
+- generic command errors show stable user-facing copy
+- field validation still shows actionable field-specific messages
+- tests cover unknown/unexpected command error payloads
+
+### 28. [ ] Remove Global Horizontal Overflow Hiding
+
+Issue: global CSS sets `overflow-x: hidden` on `html, body`.
+
+Why it matters: this can mask layout bugs, clip focus outlines, and make mobile overflow tests less meaningful.
+
+Fix direction: remove the global hiding after moving any needed containment to specific panels or content blocks. Keep the existing mobile overflow test and add a narrower viewport check if needed.
+
+Done when:
+
+- no global `overflow-x: hidden` is needed to pass mobile layout
+- browser/e2e checks still show no horizontal overflow
+- long emails, ids, and error messages remain readable
+
+### 29. [ ] Delete Speculative Or Unused Helpers
+
+Issue: small helpers such as `idempotencyReplaySchema` appear unused while more specific schemas own the real behavior.
+
+Why it matters: unused abstractions make the codebase feel more generic than it is and add concepts future readers must inspect.
+
+Fix direction: delete unused wrappers after confirming there is no near-term caller. Prefer re-adding abstractions when the second real use appears.
+
+Done when:
+
+- unused/speculative helpers are removed or justified
+- tests still pass
+- no public package export suggests a capability the repo does not use
+
 ## Do Not Start Yet
 
-Do not start these until the requester hardening backlog above is substantially complete:
+Do not start these until the requester hardening backlog above is substantially complete and the highest-priority post-hardening review items are fixed or intentionally deferred:
 
 - reviewer/admin workflow UI
 - reviewer/admin mutations

@@ -5,16 +5,13 @@ import {
   submitRequest
 } from "./commands/study-access";
 import {
-  createDraftInputSchema,
-  saveDraftInputSchema,
-  submitRequestInputSchema
-} from "./commands/validation";
-import {
   getRequesterStudyAccess,
   listStudies
 } from "./queries/study-access";
 import { authenticatedProcedure, publicProcedure, router } from "./trpc";
 import { z } from "zod";
+
+const authenticatedCommandProcedure = authenticatedProcedure.input(z.unknown());
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -26,21 +23,15 @@ export const appRouter = router({
   myStudyAccess: authenticatedProcedure
     .input(z.object({ studyId: z.uuid() }))
     .query(({ ctx, input }) => getRequesterStudyAccess(ctx.actor, input.studyId)),
-  createDraft: authenticatedProcedure
-    .input(createDraftInputSchema)
-    .mutation(async ({ ctx, input }) =>
-      toCommandResponse(await createDraft(ctx.actor, input))
-    ),
-  saveDraft: authenticatedProcedure
-    .input(saveDraftInputSchema)
-    .mutation(async ({ ctx, input }) =>
-      toCommandResponse(await saveDraft(ctx.actor, input))
-    ),
-  submitRequest: authenticatedProcedure
-    .input(submitRequestInputSchema)
-    .mutation(async ({ ctx, input }) =>
-      toCommandResponse(await submitRequest(ctx.actor, input))
-    )
+  createDraft: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
+    toCommandResponse(await createDraft(ctx.actor, input))
+  ),
+  saveDraft: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
+    toCommandResponse(await saveDraft(ctx.actor, input))
+  ),
+  submitRequest: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
+    toCommandResponse(await submitRequest(ctx.actor, input))
+  )
 });
 
 export type AppRouter = typeof appRouter;
