@@ -11,18 +11,15 @@ export const err = <E>(error: E): Result<never, E> => ({
   error
 });
 
-export const appErrorCodes = [
-  "ValidationError",
-  "Unauthorized",
-  "Forbidden",
-  "NotFound",
-  "InvalidTransition",
-  "IdempotencyConflict",
-  "Conflict",
-  "Unexpected"
-] as const;
-
-export type AppErrorCode = (typeof appErrorCodes)[number];
+type AppErrorCode =
+  | "ValidationError"
+  | "Unauthorized"
+  | "Forbidden"
+  | "NotFound"
+  | "InvalidTransition"
+  | "IdempotencyConflict"
+  | "Conflict"
+  | "Unexpected";
 
 export type FieldErrors<FieldName extends string = string> = Partial<
   Record<FieldName, string[]>
@@ -35,10 +32,7 @@ export type ValidationAppError<FieldName extends string = string> = {
   fieldErrors: FieldErrors<FieldName>;
 };
 
-export type NonValidationAppErrorCode = Exclude<
-  AppErrorCode,
-  "ValidationError"
->;
+type NonValidationAppErrorCode = Exclude<AppErrorCode, "ValidationError">;
 
 export type NonValidationAppError = {
   code: NonValidationAppErrorCode;
@@ -69,11 +63,6 @@ export const validationError = <FieldName extends string = string>(
   formErrors: options.formErrors ?? [],
   fieldErrors: options.fieldErrors ?? {}
 });
-
-export const unauthorized = (
-  message = "Authentication required"
-): NonValidationAppError =>
-  appError("Unauthorized", message);
 
 export const forbidden = (message = "Permission denied"): NonValidationAppError =>
   appError("Forbidden", message);
@@ -120,10 +109,6 @@ export const fromZod = <T, FieldName extends string = string>(
       formErrors: flattened.formErrors
     })
   );
-};
-
-export const assertNever = (value: never, message = "Unexpected value"): never => {
-  throw new Error(`${message}: ${String(value)}`);
 };
 
 export type CommandResponse<T, E = AppError> = Result<T, E>;

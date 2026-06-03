@@ -50,17 +50,6 @@ const sortJson = (value: unknown): JsonValue => {
 export const hashPayload = (payload: unknown): string =>
   createHash("sha256").update(JSON.stringify(sortJson(payload))).digest("hex");
 
-export const idempotencyReplaySchema = <T extends z.ZodType>(
-  payloadSchema: T
-) =>
-  z.object({
-    requestId: z.uuid(),
-    auditEventId: z.uuid(),
-    status: z.literal("submitted"),
-    submittedAt: z.string().datetime(),
-    draft: payloadSchema
-  });
-
 export const resolveIdempotencyReplay = <T>(
   commandName: string,
   payloadHash: string,

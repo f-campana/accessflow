@@ -6,12 +6,11 @@ import {
 } from "@accessflow/core";
 
 import type { AuthenticatedActor } from "../../context";
-import { requesterOnly } from "../types";
 
 export const ensureRequester = (
   actor: AuthenticatedActor
 ): Result<true, AppError> =>
-  requesterOnly(actor)
+  actor.role === "requester"
     ? ok(true)
     : {
         ok: false,

@@ -594,7 +594,7 @@ Plain summary: the page no longer hides horizontal overflow globally. If a futur
 
 Lesson: global overflow hiding is a mask, not a layout fix. Prefer making each surface wrap or contain its own content, then test narrow screens directly.
 
-### 29. [ ] Delete Speculative Or Unused Helpers
+### 29. [x] Delete Speculative Or Unused Helpers
 
 Issue: small helpers such as `idempotencyReplaySchema` appear unused while more specific schemas own the real behavior.
 
@@ -607,6 +607,12 @@ Done when:
 - unused/speculative helpers are removed or justified
 - tests still pass
 - no public package export suggests a capability the repo does not use
+
+Completed 2026-06-03: removed the unused `idempotencyReplaySchema` wrapper so idempotency replay validation uses the concrete `submitRequestResultSchema` directly. Removed the unused generic `CommandHandler` type and the one-line `requesterOnly` alias, leaving requester authorization visible in `ensureRequester`. Narrowed `@accessflow/core` by making internal error-code vocabulary private and deleting unused public `unauthorized` and `assertNever` helpers. A package-export audit now finds no unused exported symbols in `packages/*`. Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: small helpers that looked reusable but had no real second caller were removed. The remaining code says what it does more directly, especially around idempotency replay and requester authorization.
+
+Lesson: a helper earns its name when it hides real repeated behavior. If it only wraps one line or predicts a future use, it usually makes the current code harder to read.
 
 ## Do Not Start Yet
 
