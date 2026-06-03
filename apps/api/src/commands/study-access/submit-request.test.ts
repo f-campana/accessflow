@@ -101,6 +101,11 @@ describe("submitRequest", () => {
       .select({ value: count() })
       .from(studyAccessAuditEvents)
       .where(eq(studyAccessAuditEvents.requestId, result.value.requestId));
+    const [auditEvent] = await db
+      .select()
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.id, result.value.auditEventId))
+      .limit(1);
     const [idempotency] = await db
       .select()
       .from(idempotencyKeys)
@@ -117,9 +122,44 @@ describe("submitRequest", () => {
     expect(request?.requestedRole).toBe(validSubmission.requestedRole);
     expect(request?.submittedAt).toBeInstanceOf(Date);
     expect(auditCount?.value).toBe(1);
+    expect(auditEvent).toMatchObject({
+      eventType: "submitRequest",
+      fromStatus: "draft",
+      toStatus: "submitted"
+    });
     expect(idempotency?.status).toBe("completed");
     expect(idempotency?.completedAt).toBeInstanceOf(Date);
     expect(idempotency?.responsePayload).toEqual(result.value);
+  });
+
+  it("rejects impossible audit event transition triples at the database boundary", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    let caught: unknown;
+
+    try {
+      await db.insert(studyAccessAuditEvents).values({
+        requestId: created.value.requestId,
+        actorId: actor.id,
+        eventType: "submitRequest",
+        fromStatus: "submitted",
+        toStatus: "submitted"
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as { cause?: unknown }).cause).toMatchObject({
+      code: "23514",
+      constraint: "study_access_audit_events_transition_check"
+    });
   });
 
   it("replays the original result for the same actor, key, and payload", async () => {
@@ -145,6 +185,57 @@ describe("submitRequest", () => {
 
     if (!first.ok) {
       return;
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, first.value.requestId));
+
+    expect(auditCount?.value).toBe(1);
+  });
+
+  it("rejects expired idempotency key replay with the same payload", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const input = {
+      draftId: created.value.draftId,
+      idempotencyKey: "submit-expired-replay-1",
+      ...validSubmission
+    };
+
+    const first = await submitRequest(actor, input);
+
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+
+    await db
+      .update(idempotencyKeys)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(
+        and(
+          eq(idempotencyKeys.actorId, actor.id),
+          eq(idempotencyKeys.commandName, "submitRequest"),
+          eq(idempotencyKeys.key, "submit-expired-replay-1")
+        )
+      );
+
+    const second = await submitRequest(actor, input);
+
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.error).toMatchObject({
+        code: "Conflict",
+        message: "Idempotency key for submitRequest expired"
+      });
     }
 
     const [auditCount] = await db
@@ -236,6 +327,60 @@ describe("submitRequest", () => {
         .where(eq(studyAccessAuditEvents.requestId, first.value.requestId));
       expect(auditCount?.value).toBe(1);
     }
+  });
+
+  it("rejects expired idempotency key reuse with a different payload as expired", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const first = await submitRequest(actor, {
+      draftId: created.value.draftId,
+      idempotencyKey: "submit-expired-conflict-1",
+      ...validSubmission
+    });
+
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+
+    await db
+      .update(idempotencyKeys)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(
+        and(
+          eq(idempotencyKeys.actorId, actor.id),
+          eq(idempotencyKeys.commandName, "submitRequest"),
+          eq(idempotencyKeys.key, "submit-expired-conflict-1")
+        )
+      );
+
+    const second = await submitRequest(actor, {
+      draftId: created.value.draftId,
+      idempotencyKey: "submit-expired-conflict-1",
+      ...validSubmission,
+      purpose: "Different payload after expiry"
+    });
+
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.error).toMatchObject({
+        code: "Conflict",
+        message: "Idempotency key for submitRequest expired"
+      });
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, first.value.requestId));
+
+    expect(auditCount?.value).toBe(1);
   });
 
   it("handles concurrent same-key different-payload submit attempts as a typed conflict", async () => {

@@ -261,6 +261,16 @@ export const studyAccessAuditEvents = pgTable(
       table.requestId,
       table.createdAt,
       table.id
+    ),
+    transitionCheck: check(
+      "study_access_audit_events_transition_check",
+      sql`
+        (
+          ${table.eventType} = 'submitRequest'
+          and ${table.fromStatus} = 'draft'
+          and ${table.toStatus} = 'submitted'
+        )
+      `
     )
   })
 );

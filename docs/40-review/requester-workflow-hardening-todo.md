@@ -392,7 +392,7 @@ Plain summary: wording no longer controls requester workflow behavior. The app n
 
 Lesson: copy is product output, not application state. If behavior depends on a label, a harmless wording change can become a bug.
 
-### 19. [ ] Add Audit Event Transition Constraints
+### 19. [x] Add Audit Event Transition Constraints
 
 Issue: audit events are constrained to enum values, but not to legal event/from/to triples. The database would accept impossible audit facts such as `submitRequest` from `submitted` to `submitted`.
 
@@ -406,7 +406,13 @@ Done when:
 - direct schema-invariant tests cover invalid audit transitions
 - submit still writes the legal audit row in the same transaction
 
-### 20. [ ] Define And Enforce Idempotency Expiry Semantics
+Completed 2026-06-03: added the `study_access_audit_events_transition_check` database constraint, generated migration `0004_hot_hairball.sql`, added a direct Postgres check-violation test for an impossible `submitRequest` `submitted -> submitted` audit row, and asserted that `submitRequest` still persists the legal `submitRequest` `draft -> submitted` audit event. Verification: `pnpm --filter @accessflow/api test`, `pnpm --filter @accessflow/api db:migrate`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: audit rows can no longer claim impossible workflow history. The database now accepts the current legal submit audit event and rejects a fake submitted-to-submitted submit event.
+
+Lesson: an audit log is only useful if impossible facts cannot be written. Event enums are not enough; durable audit rows also need legal from/to transition rules.
+
+### 20. [x] Define And Enforce Idempotency Expiry Semantics
 
 Issue: idempotency rows have `expiresAt`, but replay lookup ignores it. Keys currently replay or conflict forever.
 
@@ -419,6 +425,14 @@ Done when:
 - expired idempotency keys have a documented behavior
 - submit replay tests cover expired same-payload and expired different-payload keys
 - the schema and command code tell the same story
+
+Decision: v1 rejects expired idempotency keys with a typed `Conflict`, regardless of whether the payload matches the original command. The client must start a new attempt with a new idempotency key.
+
+Completed 2026-06-03: made `resolveIdempotencyReplay` enforce `expiresAt` before replay or payload-mismatch checks, kept `idempotency_keys.expires_at` as the durable schema contract, and added submit tests for expired same-payload replay and expired different-payload reuse. Verification: `pnpm --filter @accessflow/api test`, `pnpm --filter @accessflow/api db:migrate`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: idempotency keys no longer replay forever. Once a key expires, the API returns a normal conflict and asks the caller to use a new key, even if the repeated payload is identical.
+
+Lesson: stored expiry fields must change behavior. If the command ignores expiry, the schema is promising something the application does not actually enforce.
 
 ### 21. [ ] Extract A Requester Workspace Controller Hook
 

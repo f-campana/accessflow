@@ -68,9 +68,16 @@ export const resolveIdempotencyReplay = <T>(
     payloadHash: string;
     status: "pending" | "completed" | "failed";
     responsePayload: unknown;
+    expiresAt: Date;
   },
   responseSchema: z.ZodType<T>
 ): Result<T> => {
+  // Expired keys are not replayable. The caller must start a new attempt with
+  // a new idempotency key so the stored expiry field has real command meaning.
+  if (existing.expiresAt.getTime() <= Date.now()) {
+    return err(conflict(`Idempotency key for ${commandName} expired`));
+  }
+
   if (existing.payloadHash !== payloadHash) {
     return err(idempotencyConflict());
   }
