@@ -10,14 +10,49 @@ const expectNoHorizontalOverflow = async (page: Page) => {
     bodyClientWidth: document.body.clientWidth,
     bodyScrollWidth: document.body.scrollWidth,
     documentClientWidth: document.documentElement.clientWidth,
-    documentScrollWidth: document.documentElement.scrollWidth
+    documentScrollWidth: document.documentElement.scrollWidth,
+    bodyOverflowX: getComputedStyle(document.body).overflowX,
+    documentOverflowX: getComputedStyle(document.documentElement).overflowX
   }));
 
+  expect(overflow.documentOverflowX).not.toBe("hidden");
+  expect(overflow.bodyOverflowX).not.toBe("hidden");
   expect(overflow.documentScrollWidth).toBeLessThanOrEqual(
     overflow.documentClientWidth + 1
   );
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(
     overflow.bodyClientWidth + 1
+  );
+};
+
+const expectFocusedElementInsideViewport = async (page: Page) => {
+  const focusedElementBounds = await page.evaluate(() => {
+    const activeElement = document.activeElement;
+
+    if (!(activeElement instanceof HTMLElement)) {
+      return null;
+    }
+
+    const rect = activeElement.getBoundingClientRect();
+
+    return {
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth
+    };
+  });
+
+  expect(focusedElementBounds).not.toBeNull();
+  expect(focusedElementBounds?.left).toBeGreaterThanOrEqual(0);
+  expect(focusedElementBounds?.right).toBeLessThanOrEqual(
+    (focusedElementBounds?.viewportWidth ?? 0) + 1
+  );
+  expect(focusedElementBounds?.top).toBeGreaterThanOrEqual(0);
+  expect(focusedElementBounds?.bottom).toBeLessThanOrEqual(
+    (focusedElementBounds?.viewportHeight ?? 0) + 1
   );
 };
 
@@ -32,6 +67,7 @@ test("requester can submit a durable study access request", async ({ page }) => 
     consoleMessages.push(`pageerror: ${error.message}`);
   });
 
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/");
 
   await expect(
@@ -91,6 +127,8 @@ test("requester can submit a durable study access request", async ({ page }) => 
     "aria-invalid",
     "true"
   );
+  await expectFocusedElementInsideViewport(page);
+  await expectNoHorizontalOverflow(page);
   await expect(page.locator("#request-purpose-error")).toHaveText(
     "Purpose is required"
   );

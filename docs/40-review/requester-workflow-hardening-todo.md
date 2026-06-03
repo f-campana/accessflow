@@ -574,7 +574,7 @@ Plain summary: command errors now pass through a display mapper before reaching 
 
 Lesson: API error messages are useful diagnostics, not automatically product copy. The UI boundary should decide what is safe and helpful to display.
 
-### 28. [ ] Remove Global Horizontal Overflow Hiding
+### 28. [x] Remove Global Horizontal Overflow Hiding
 
 Issue: global CSS sets `overflow-x: hidden` on `html, body`.
 
@@ -587,6 +587,12 @@ Done when:
 - no global `overflow-x: hidden` is needed to pass mobile layout
 - browser/e2e checks still show no horizontal overflow
 - long emails, ids, and error messages remain readable
+
+Completed 2026-06-03: removed the document-level `overflow-x: hidden` rule from the web global stylesheet. Strengthened the requester Playwright workflow to run at a 320px mobile viewport, assert that neither `html` nor `body` hides horizontal overflow, keep checking that document and body scroll widths stay within the viewport, and verify the focused validation summary remains inside the viewport. Captured a 320px Playwright screenshot of the requester entry state after the change. Verification: `pnpm --filter @accessflow/web lint`, `pnpm --filter @accessflow/web typecheck`, `pnpm --filter @accessflow/web test`, `pnpm test:e2e`, and rendered screenshot capture with Playwright.
+
+Plain summary: the page no longer hides horizontal overflow globally. If a future component becomes too wide, tests should catch it instead of the browser silently clipping it.
+
+Lesson: global overflow hiding is a mask, not a layout fix. Prefer making each surface wrap or contain its own content, then test narrow screens directly.
 
 ### 29. [ ] Delete Speculative Or Unused Helpers
 
