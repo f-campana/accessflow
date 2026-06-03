@@ -12,18 +12,12 @@ import {
 } from "@accessflow/core";
 
 import type { AuthenticatedActor } from "../../context";
-import {
-  studyAccessRequestDrafts,
-  studyAccessRequests
-} from "../../db/schema";
+import { studyAccessRequestDrafts } from "../../db/schema";
 import { saveDraftInputSchema, type DraftFields } from "../validation";
 import { ensureRequester } from "./authorization";
 import { defaultDependencies, rollbackCommandError } from "./command-transaction";
-import {
-  definedDraftValues,
-  mergeDraftFields,
-  readDraftFields
-} from "./draft-fields";
+import { draftPatchValues, mergeDraftFields } from "./draft-fields";
+import { readRequesterDraftForUpdate } from "./draft-record";
 
 export type SaveDraftResult = {
   requestId: string;
@@ -49,63 +43,39 @@ export const saveDraft = async (
 
   try {
     return await dependencies.db.transaction(async (tx) => {
-      const [draftRecord] = await tx
-        .select({
-          draftId: studyAccessRequestDrafts.id,
-          requestId: studyAccessRequestDrafts.requestId,
-          ownerId: studyAccessRequestDrafts.ownerId,
-          requesterId: studyAccessRequests.requesterId,
-          status: studyAccessRequests.status,
-          purpose: studyAccessRequestDrafts.purpose,
-          requestedRole: studyAccessRequestDrafts.requestedRole,
-          justification: studyAccessRequestDrafts.justification,
-          affiliation: studyAccessRequestDrafts.affiliation,
-          supportingNotes: studyAccessRequestDrafts.supportingNotes
-        })
-        .from(studyAccessRequestDrafts)
-        .innerJoin(
-          studyAccessRequests,
-          eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
-        )
-        .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId))
-        .limit(1)
-        .for("update");
+      const draftRecord = await readRequesterDraftForUpdate(
+        tx,
+        parsed.value.draftId
+      );
 
-      if (!draftRecord) {
+      if (!draftRecord.ok) {
+        return draftRecord;
+      }
+
+      if (!draftRecord.value) {
         return err(notFound("Draft not found"));
       }
 
-      if (
-        draftRecord.requesterId !== actor.id ||
-        draftRecord.ownerId !== actor.id
-      ) {
+      const ownedDraft = draftRecord.value;
+
+      if (ownedDraft.requesterId !== actor.id || ownedDraft.ownerId !== actor.id) {
         return err(forbidden("Cannot update another requester's draft"));
       }
 
-      if (draftRecord.status !== "draft") {
+      if (ownedDraft.status !== "draft") {
         return err(invalidTransition("Only draft requests can be edited"));
       }
 
-      const currentDraft = readDraftFields(draftRecord);
-
-      if (!currentDraft.ok) {
-        return currentDraft;
-      }
-
-      const nextDraft = mergeDraftFields(currentDraft.value, parsed.value);
-      const updateValues = definedDraftValues(parsed.value);
+      const nextDraft = mergeDraftFields(ownedDraft.draft, parsed.value);
 
       await tx
         .update(studyAccessRequestDrafts)
-        .set({
-          ...updateValues,
-          updatedAt: new Date()
-        })
+        .set(draftPatchValues(parsed.value, new Date()))
         .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId));
 
       return ok({
-        requestId: draftRecord.requestId,
-        draftId: draftRecord.draftId,
+        requestId: ownedDraft.requestId,
+        draftId: ownedDraft.draftId,
         status: "draft",
         draft: nextDraft
       });

@@ -454,7 +454,7 @@ Plain summary: the large requester screen no longer contains both the workflow b
 
 Lesson: when a UI component becomes a workflow controller, move the orchestration into a hook or reducer before adding more states. That makes behavior easier to test without mounting the whole page.
 
-### 22. [ ] Extract Canonical Draft Read And Patch Helpers
+### 22. [x] Extract Canonical Draft Read And Patch Helpers
 
 Issue: `saveDraft` and `submitRequest` both manually rebuild the owned-draft joined row shape and repeat parts of ownership/status/draft parsing.
 
@@ -467,6 +467,12 @@ Done when:
 - save and submit share one locked draft read shape
 - ownership/status checks are easier to scan
 - existing save/submit command tests still pass
+
+Completed 2026-06-03: added `readRequesterDraftForUpdate` as the shared locked draft/request read path, added `draftPatchValues` and `finalDraftPatchValues` for save/submit database updates, and rewired `saveDraft` and `submitRequest` to use those helpers while keeping not-found, ownership, status, transition, and idempotency policy visible in the command files. Updated command tests to prove partial saves preserve omitted fields and submit persists the final draft values. Verification: `pnpm --filter @accessflow/api lint`, `pnpm --filter @accessflow/api typecheck`, `pnpm --filter @accessflow/api test`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: save and submit no longer each rebuild the same locked draft query and patch objects. They now share the database plumbing, while each command still shows the business decisions it owns.
+
+Lesson: duplication around persistence shape is easy to miss because it looks like harmless column wiring. Once two commands need the same locked row, extract the row reader and patch builders so future workflow changes do not drift.
 
 ### 23. [ ] Remove Duplicate Workflow Transition Sources
 

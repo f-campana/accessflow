@@ -49,7 +49,24 @@ export const mergeDraftFields = (
   supportingNotes:
     updates.supportingNotes !== undefined
       ? updates.supportingNotes
-      : current.supportingNotes
+    : current.supportingNotes
+});
+
+export const draftPatchValues = (draft: DraftFields, updatedAt: Date) => ({
+  ...definedDraftValues(draft),
+  updatedAt
+});
+
+export const finalDraftPatchValues = (
+  draft: FinalDraftFields,
+  updatedAt: Date
+) => ({
+  purpose: draft.purpose,
+  requestedRole: draft.requestedRole,
+  justification: draft.justification,
+  affiliation: draft.affiliation,
+  supportingNotes: draft.supportingNotes ?? null,
+  updatedAt
 });
 
 export const readDraftFields = (draft: {

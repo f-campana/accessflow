@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { db } from "../../db/client";
+import { studyAccessRequestDrafts } from "../../db/schema";
 import {
   createTestActor,
   createTestStudy,
@@ -46,6 +49,57 @@ describe("saveDraft", () => {
           requestedRole: "viewer"
         })
       })
+    });
+  });
+
+  it("merges partial saves without clearing omitted draft fields", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const created = await createDraft(actor, {
+      studyId: study.id,
+      purpose: "Initial synthetic access purpose",
+      justification: "Initial study justification",
+      affiliation: "Initial research team",
+      requestedRole: "viewer"
+    });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const result = await saveDraft(actor, {
+      draftId: created.value.draftId,
+      requestedRole: "analyst"
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        draft: expect.objectContaining({
+          purpose: "Initial synthetic access purpose",
+          justification: "Initial study justification",
+          affiliation: "Initial research team",
+          requestedRole: "analyst"
+        })
+      })
+    });
+
+    const [persistedDraft] = await db
+      .select({
+        purpose: studyAccessRequestDrafts.purpose,
+        requestedRole: studyAccessRequestDrafts.requestedRole,
+        justification: studyAccessRequestDrafts.justification,
+        affiliation: studyAccessRequestDrafts.affiliation
+      })
+      .from(studyAccessRequestDrafts)
+      .where(eq(studyAccessRequestDrafts.id, created.value.draftId))
+      .limit(1);
+
+    expect(persistedDraft).toEqual({
+      purpose: "Initial synthetic access purpose",
+      requestedRole: "analyst",
+      justification: "Initial study justification",
+      affiliation: "Initial research team"
     });
   });
 

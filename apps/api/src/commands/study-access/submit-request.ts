@@ -28,10 +28,11 @@ import {
   rollbackCommandError
 } from "./command-transaction";
 import {
+  finalDraftPatchValues,
   mergeDraftFields,
-  readDraftFields,
   validateFinalDraft
 } from "./draft-fields";
+import { readRequesterDraftForUpdate } from "./draft-record";
 import {
   submitRequestResultSchema,
   type SubmitRequestResult
@@ -105,47 +106,27 @@ export const submitRequest = async (
         );
       }
 
-      const [draftRecord] = await tx
-        .select({
-          draftId: studyAccessRequestDrafts.id,
-          requestId: studyAccessRequestDrafts.requestId,
-          ownerId: studyAccessRequestDrafts.ownerId,
-          requesterId: studyAccessRequests.requesterId,
-          status: studyAccessRequests.status,
-          purpose: studyAccessRequestDrafts.purpose,
-          requestedRole: studyAccessRequestDrafts.requestedRole,
-          justification: studyAccessRequestDrafts.justification,
-          affiliation: studyAccessRequestDrafts.affiliation,
-          supportingNotes: studyAccessRequestDrafts.supportingNotes
-        })
-        .from(studyAccessRequestDrafts)
-        .innerJoin(
-          studyAccessRequests,
-          eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
-        )
-        .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId))
-        .limit(1)
-        .for("update");
+      const draftRecord = await readRequesterDraftForUpdate(
+        tx,
+        parsed.value.draftId
+      );
 
-      if (!draftRecord) {
+      if (!draftRecord.ok) {
+        return abortCommand(draftRecord.error);
+      }
+
+      if (!draftRecord.value) {
         return abortCommand(notFound("Draft not found"));
       }
 
-      if (
-        draftRecord.requesterId !== actor.id ||
-        draftRecord.ownerId !== actor.id
-      ) {
+      const ownedDraft = draftRecord.value;
+
+      if (ownedDraft.requesterId !== actor.id || ownedDraft.ownerId !== actor.id) {
         return abortCommand(forbidden("Cannot submit another requester's draft"));
       }
 
-      const currentDraft = readDraftFields(draftRecord);
-
-      if (!currentDraft.ok) {
-        return abortCommand(currentDraft.error);
-      }
-
       const finalDraftCandidate = mergeDraftFields(
-        currentDraft.value,
+        ownedDraft.draft,
         parsed.value
       );
       const finalDraft = validateFinalDraft(finalDraftCandidate);
@@ -155,7 +136,7 @@ export const submitRequest = async (
       }
 
       const transition = transitionWorkflowStatus(
-        draftRecord.status,
+        ownedDraft.status,
         "submitRequest"
       );
 
@@ -167,14 +148,7 @@ export const submitRequest = async (
 
       await tx
         .update(studyAccessRequestDrafts)
-        .set({
-          purpose: finalDraft.value.purpose,
-          requestedRole: finalDraft.value.requestedRole,
-          justification: finalDraft.value.justification,
-          affiliation: finalDraft.value.affiliation,
-          supportingNotes: finalDraft.value.supportingNotes ?? null,
-          updatedAt: submittedAt
-        })
+        .set(finalDraftPatchValues(finalDraft.value, submittedAt))
         .where(eq(studyAccessRequestDrafts.id, parsed.value.draftId));
 
       const [updatedRequest] = await tx
@@ -187,7 +161,7 @@ export const submitRequest = async (
         })
         .where(
           and(
-            eq(studyAccessRequests.id, draftRecord.requestId),
+            eq(studyAccessRequests.id, ownedDraft.requestId),
             eq(studyAccessRequests.status, transition.value.from)
           )
         )
@@ -200,7 +174,7 @@ export const submitRequest = async (
       const [auditEvent] = await tx
         .insert(studyAccessAuditEvents)
         .values({
-          requestId: draftRecord.requestId,
+          requestId: ownedDraft.requestId,
           actorId: actor.id,
           eventType: transition.value.eventType,
           fromStatus: transition.value.from,
@@ -218,7 +192,7 @@ export const submitRequest = async (
       }
 
       const response: SubmitRequestResult = {
-        requestId: draftRecord.requestId,
+        requestId: ownedDraft.requestId,
         auditEventId: auditEvent.id,
         status: "submitted",
         submittedAt: submittedAt.toISOString(),
@@ -229,7 +203,7 @@ export const submitRequest = async (
         .update(idempotencyKeys)
         .set({
           status: "completed",
-          resultReference: draftRecord.requestId,
+          resultReference: ownedDraft.requestId,
           responsePayload: response,
           completedAt: submittedAt
         })

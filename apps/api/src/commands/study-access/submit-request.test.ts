@@ -7,6 +7,7 @@ import { db } from "../../db/client";
 import {
   idempotencyKeys,
   studyAccessAuditEvents,
+  studyAccessRequestDrafts,
   studyAccessRequests
 } from "../../db/schema";
 import {
@@ -97,6 +98,11 @@ describe("submitRequest", () => {
       .from(studyAccessRequests)
       .where(eq(studyAccessRequests.id, result.value.requestId))
       .limit(1);
+    const [draft] = await db
+      .select()
+      .from(studyAccessRequestDrafts)
+      .where(eq(studyAccessRequestDrafts.id, created.value.draftId))
+      .limit(1);
     const [auditCount] = await db
       .select({ value: count() })
       .from(studyAccessAuditEvents)
@@ -121,6 +127,13 @@ describe("submitRequest", () => {
     expect(request?.status).toBe("submitted");
     expect(request?.requestedRole).toBe(validSubmission.requestedRole);
     expect(request?.submittedAt).toBeInstanceOf(Date);
+    expect(draft).toMatchObject({
+      purpose: validSubmission.purpose,
+      requestedRole: validSubmission.requestedRole,
+      justification: validSubmission.justification,
+      affiliation: validSubmission.affiliation,
+      supportingNotes: null
+    });
     expect(auditCount?.value).toBe(1);
     expect(auditEvent).toMatchObject({
       eventType: "submitRequest",
