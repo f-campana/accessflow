@@ -434,7 +434,7 @@ Plain summary: idempotency keys no longer replay forever. Once a key expires, th
 
 Lesson: stored expiry fields must change behavior. If the command ignores expiry, the schema is promising something the application does not actually enforce.
 
-### 21. [ ] Extract A Requester Workspace Controller Hook
+### 21. [x] Extract A Requester Workspace Controller Hook
 
 Issue: `RequesterWorkspace` still owns session bootstrap, study selection, async guards, command execution, refresh retry policy, submit idempotency reconciliation, error state, and draft form state.
 
@@ -447,6 +447,12 @@ Done when:
 - `RequesterWorkspace` reads as wiring/rendering rather than implementation detail
 - controller state transitions are unit-tested without rendering the full page
 - existing Playwright requester workflow still passes
+
+Completed 2026-06-03: extracted `useRequesterWorkspaceController` so session bootstrap, auth commands, study loading, async guards, command execution, refresh retry, submit-attempt reconciliation, error state, and draft form state live outside the page renderer. `RequesterWorkspace` now wires controller state/actions into presentational panels. Added controller-state unit tests for selected study derivation, idle status, draft command locking, refresh-retry locking, and submitted read-only state. Verification: `pnpm --filter @accessflow/web test`, `pnpm --filter @accessflow/web lint`, `pnpm --filter @accessflow/web typecheck`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, Browser-rendered sign-out smoke on `http://192.168.1.31:3000` with no console warnings/errors, and `git diff --check`.
+
+Plain summary: the large requester screen no longer contains both the workflow brain and the rendering. The hook owns the workflow behavior; the component mostly passes state and callbacks to the panels.
+
+Lesson: when a UI component becomes a workflow controller, move the orchestration into a hook or reducer before adding more states. That makes behavior easier to test without mounting the whole page.
 
 ### 22. [ ] Extract Canonical Draft Read And Patch Helpers
 
