@@ -2,7 +2,7 @@ import { unexpected, type NonValidationAppError } from "@accessflow/core";
 
 type CommandAction = "createDraft" | "saveDraft" | "submitRequest";
 
-const commandFailureMessages = {
+export const commandFailureMessages = {
   createDraft:
     "Draft could not be created. No workflow change was confirmed. Try again.",
   saveDraft:
@@ -11,7 +11,7 @@ const commandFailureMessages = {
     "Request could not be submitted. No workflow change was confirmed. Try again."
 } satisfies Record<CommandAction, string>;
 
-const reloadFailureMessages = {
+export const reloadFailureMessages = {
   createDraft:
     "Draft was created, but the workspace could not refresh. Retry refresh before continuing.",
   saveDraft:
@@ -28,5 +28,14 @@ export const commandReloadError = (
   action: CommandAction
 ): NonValidationAppError => unexpected(reloadFailureMessages[action]);
 
+export const refreshRetryMessage =
+  "Workspace could not refresh. Retry again before continuing.";
+
+export const safeRequesterCommandMessages = new Set<string>([
+  ...Object.values(commandFailureMessages),
+  ...Object.values(reloadFailureMessages),
+  refreshRetryMessage
+]);
+
 export const refreshRetryError = (): NonValidationAppError =>
-  unexpected("Workspace could not refresh. Retry again before continuing.");
+  unexpected(refreshRetryMessage);

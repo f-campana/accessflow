@@ -554,7 +554,7 @@ Plain summary: after an invalid submit, focus now moves to the error summary ins
 
 Lesson: rendering an error is not enough. The UI also has to move attention to the new problem and announce important state changes without requiring users to visually scan the whole page.
 
-### 27. [ ] Sanitize Command Error Copy At The Web Boundary
+### 27. [x] Sanitize Command Error Copy At The Web Boundary
 
 Issue: command errors render `error.message` and `formErrors` directly from the API. Auth errors already have a safe-copy mapper, but command errors do not.
 
@@ -567,6 +567,12 @@ Done when:
 - generic command errors show stable user-facing copy
 - field validation still shows actionable field-specific messages
 - tests cover unknown/unexpected command error payloads
+
+Completed 2026-06-03: added sanitized command error descriptions and whitelisted validation form-message rendering in the requester web boundary. The requester alert now renders `commandErrorDescription(error)` and `commandErrorFormMessages(error)` instead of raw `error.message` and raw `formErrors`. Known safe web-owned command messages are preserved, while raw API conflict/forbidden/unexpected messages are replaced with stable user-facing copy. Tests cover raw backend-looking messages, safe local command messages, and validation form-message allowlisting. Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `git diff --check`.
+
+Plain summary: command errors now pass through a display mapper before reaching the user. Field errors can still say exactly what to fix, but generic backend messages no longer leak implementation details into the UI.
+
+Lesson: API error messages are useful diagnostics, not automatically product copy. The UI boundary should decide what is safe and helpful to display.
 
 ### 28. [ ] Remove Global Horizontal Overflow Hiding
 

@@ -23,7 +23,11 @@ import {
   firstDraftFieldError,
   type DraftFieldName
 } from "./requester-field-accessibility";
-import { appErrorTitle } from "./requester-error-copy";
+import {
+  appErrorTitle,
+  commandErrorDescription,
+  commandErrorFormMessages
+} from "./requester-error-copy";
 import { compactId } from "./requester-workspace-model";
 
 const requestedStudyRoleLabels = {
@@ -486,7 +490,7 @@ function CommandError({
     return null;
   }
 
-  const formErrors = error.code === "ValidationError" ? error.formErrors : [];
+  const formErrors = commandErrorFormMessages(error);
 
   return (
     <div
@@ -498,7 +502,7 @@ function CommandError({
       aria-labelledby={draftErrorSummaryTitleId}
     >
       <strong id={draftErrorSummaryTitleId}>{appErrorTitle(error)}</strong>
-      <span>{error.message}</span>
+      <span>{commandErrorDescription(error)}</span>
       {formErrors.map((formError) => (
         <span key={formError}>{formError}</span>
       ))}
