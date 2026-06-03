@@ -352,7 +352,7 @@ Plain summary: command validation now comes from the command layer, not from the
 
 Lesson: adapters should not steal business-rule errors from the application layer. For workflow commands, transport should authenticate and deliver input; the command should validate, decide, and return the typed result.
 
-### 17. [ ] Lock Draft Fields While Refresh Retry Is Required
+### 17. [x] Lock Draft Fields While Refresh Retry Is Required
 
 Issue: after a command may have committed but the UI failed to reload, Save and Submit are disabled, but draft fields remain editable.
 
@@ -366,7 +366,13 @@ Done when:
 - the disabled reason remains clear to the user
 - tests cover the retry-refresh edit-lock path
 
-### 18. [ ] Replace Stringly Busy State With Typed Operation State
+Completed 2026-06-03: extended the draft edit-lock helper so `canRetryRefresh` locks draft fields, computed one `draftFieldsEditable` value in `RequesterWorkspace`, used it for both rendered field disabled state and late `onChange` guards, and added a unit test proving draft fields are locked while refresh retry is required. Verification: `pnpm --filter @accessflow/web test`.
+
+Plain summary: when the app says a command may have committed and the workspace must be refreshed, the draft form now stops accepting edits too. Users can retry refresh instead of typing into stale local state that may be overwritten.
+
+Lesson: when a workflow state is ambiguous, lock every action that depends on stale local data, not just the final submit buttons.
+
+### 18. [x] Replace Stringly Busy State With Typed Operation State
 
 Issue: `RequesterWorkspace` stores `busy` as user-facing strings like `"Saving draft"`, and edit-lock logic depends on those exact labels.
 
@@ -379,6 +385,12 @@ Done when:
 - behavioral checks use typed operation kinds, not strings
 - status-line copy is derived from operation state
 - tests prove save/submit edit locking does not depend on wording
+
+Completed 2026-06-03: added a typed requester operation state, moved status-line labels into a separate operation-to-copy mapper, changed `RequesterWorkspace` to store operation kinds instead of user-facing busy strings, and updated draft edit-lock tests to use operation kinds for save/submit locking. Verification: `pnpm --filter @accessflow/web test`, `pnpm --filter @accessflow/web lint`, `pnpm --filter @accessflow/web typecheck`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e`.
+
+Plain summary: wording no longer controls requester workflow behavior. The app now stores typed operation names like `savingDraft`, while display text such as "Saving draft" is derived separately for the status line.
+
+Lesson: copy is product output, not application state. If behavior depends on a label, a harmless wording change can become a bug.
 
 ### 19. [ ] Add Audit Event Transition Constraints
 

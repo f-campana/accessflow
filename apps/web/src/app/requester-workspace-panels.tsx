@@ -218,6 +218,7 @@ type RequestPanelProps = {
   busy: boolean;
   canRetryRefresh: boolean;
   draftCommandInFlight: boolean;
+  draftFieldsEditable: boolean;
   draftForm: DraftForm;
   draftId: string | null;
   error: AppError | null;
@@ -234,6 +235,7 @@ export function RequestPanel({
   busy,
   canRetryRefresh,
   draftCommandInFlight,
+  draftFieldsEditable,
   draftForm,
   draftId,
   error,
@@ -286,7 +288,7 @@ export function RequestPanel({
               })}
               value={draftForm.purpose}
               onChange={(event) => onUpdateDraft("purpose", event.target.value)}
-              disabled={!isDraft || draftCommandInFlight}
+              disabled={!draftFieldsEditable}
               rows={4}
             />
             <FieldError
@@ -306,7 +308,7 @@ export function RequestPanel({
               onChange={(event) =>
                 onUpdateDraft("requestedRole", event.target.value)
               }
-              disabled={!isDraft || draftCommandInFlight}
+              disabled={!draftFieldsEditable}
             >
               <option value="">Select role</option>
               <option value="viewer">Viewer</option>
@@ -329,7 +331,7 @@ export function RequestPanel({
               onChange={(event) =>
                 onUpdateDraft("justification", event.target.value)
               }
-              disabled={!isDraft || draftCommandInFlight}
+              disabled={!draftFieldsEditable}
               rows={4}
             />
             <FieldError
@@ -349,7 +351,7 @@ export function RequestPanel({
               onChange={(event) =>
                 onUpdateDraft("affiliation", event.target.value)
               }
-              disabled={!isDraft || draftCommandInFlight}
+              disabled={!draftFieldsEditable}
             />
             <FieldError
               field="affiliation"
@@ -368,7 +370,7 @@ export function RequestPanel({
               onChange={(event) =>
                 onUpdateDraft("supportingNotes", event.target.value)
               }
-              disabled={!isDraft || draftCommandInFlight}
+              disabled={!draftFieldsEditable}
               rows={3}
             />
           </label>

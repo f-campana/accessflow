@@ -4,23 +4,55 @@ import {
   canEditDraftFields,
   isDraftCommandInFlight
 } from "./requester-draft-edit-lock";
+import { requesterOperationStatus } from "./requester-operation-state";
 
 describe("requester draft edit lock", () => {
   it("locks draft fields while save or submit is in flight", () => {
-    expect(isDraftCommandInFlight("Saving draft")).toBe(true);
-    expect(isDraftCommandInFlight("Submitting request")).toBe(true);
+    expect(isDraftCommandInFlight("savingDraft")).toBe(true);
+    expect(isDraftCommandInFlight("submittingRequest")).toBe(true);
   });
 
   it("does not lock draft fields for unrelated loading states", () => {
-    expect(isDraftCommandInFlight("Loading workspace")).toBe(false);
-    expect(isDraftCommandInFlight(null)).toBe(false);
+    expect(isDraftCommandInFlight("loadingWorkspace")).toBe(false);
+    expect(isDraftCommandInFlight("idle")).toBe(false);
+  });
+
+  it("derives status copy separately from edit-lock behavior", () => {
+    expect(requesterOperationStatus("savingDraft")).toBe("Saving draft");
+    expect(isDraftCommandInFlight("savingDraft")).toBe(true);
   });
 
   it("allows edits only for draft requests with no draft command in flight", () => {
-    expect(canEditDraftFields({ busy: null, isDraft: true })).toBe(true);
-    expect(canEditDraftFields({ busy: "Saving draft", isDraft: true })).toBe(
-      false
-    );
-    expect(canEditDraftFields({ busy: null, isDraft: false })).toBe(false);
+    expect(
+      canEditDraftFields({
+        canRetryRefresh: false,
+        operation: "idle",
+        isDraft: true
+      })
+    ).toBe(true);
+    expect(
+      canEditDraftFields({
+        canRetryRefresh: false,
+        operation: "savingDraft",
+        isDraft: true
+      })
+    ).toBe(false);
+    expect(
+      canEditDraftFields({
+        canRetryRefresh: false,
+        operation: "idle",
+        isDraft: false
+      })
+    ).toBe(false);
+  });
+
+  it("locks draft fields while refresh retry is required", () => {
+    expect(
+      canEditDraftFields({
+        canRetryRefresh: true,
+        operation: "idle",
+        isDraft: true
+      })
+    ).toBe(false);
   });
 });

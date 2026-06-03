@@ -15,7 +15,15 @@ import {
   commandReloadError,
   refreshRetryError
 } from "./requester-command-errors";
-import { isDraftCommandInFlight } from "./requester-draft-edit-lock";
+import {
+  canEditDraftFields,
+  isDraftCommandInFlight
+} from "./requester-draft-edit-lock";
+import {
+  isRequesterOperationActive,
+  requesterOperationStatus,
+  type RequesterOperation
+} from "./requester-operation-state";
 import {
   getOrCreateSubmitAttempt,
   isSubmitAttemptConfirmedSubmitted,
@@ -77,7 +85,8 @@ export function RequesterWorkspace() {
   const [draftForm, setDraftForm] = useState<DraftForm>(emptyDraftForm);
   const [authEmail, setAuthEmail] = useState("");
   const [authName, setAuthName] = useState("AccessFlow Requester");
-  const [busy, setBusy] = useState<string | null>("Loading workspace");
+  const [operation, setOperation] =
+    useState<RequesterOperation>("loadingWorkspace");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -108,7 +117,14 @@ export function RequesterWorkspace() {
   const draftId = access?.draft?.id ?? null;
   const isDraft = access?.request.status === "draft";
   const isSubmitted = access?.request.status === "submitted";
-  const draftCommandInFlight = isDraftCommandInFlight(busy);
+  const operationActive = isRequesterOperationActive(operation);
+  const operationStatus = requesterOperationStatus(operation);
+  const draftCommandInFlight = isDraftCommandInFlight(operation);
+  const draftFieldsEditable = canEditDraftFields({
+    canRetryRefresh,
+    operation,
+    isDraft
+  });
 
   const applyStudyAccess = useCallback((nextAccess: StudyAccess) => {
     setAccess(nextAccess);
@@ -128,7 +144,7 @@ export function RequesterWorkspace() {
   const loadWorkspace = useCallback(async () => {
     const requestId = accessRequestGuard.begin();
 
-    setBusy("Loading workspace");
+    setOperation("loadingWorkspace");
     setError(null);
     setAuthError(null);
     setNotice(null);
@@ -188,7 +204,7 @@ export function RequesterWorkspace() {
       );
     } finally {
       if (accessRequestGuard.isCurrent(requestId)) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   }, [accessRequestGuard, applyStudyAccess, isLatestStudyRequest]);
@@ -202,7 +218,7 @@ export function RequesterWorkspace() {
 
     selectedStudyIdRef.current = studyId;
     setSelectedStudyId(studyId);
-    setBusy("Loading request");
+    setOperation("loadingRequest");
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
@@ -226,13 +242,13 @@ export function RequesterWorkspace() {
       );
     } finally {
       if (accessRequestGuard.isCurrent(requestId)) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   };
 
   const authenticate = async (mode: "sign-up/email" | "sign-in/email") => {
-    setBusy(mode === "sign-up/email" ? "Creating account" : "Signing in");
+    setOperation(mode === "sign-up/email" ? "creatingAccount" : "signingIn");
     setError(null);
     setAuthError(null);
     setNotice(null);
@@ -255,12 +271,12 @@ export function RequesterWorkspace() {
     } catch (caught) {
       setAuthError(authErrorMessageFromCaught(caught, "Auth failed"));
     } finally {
-      setBusy(null);
+      setOperation("idle");
     }
   };
 
   const signOut = async () => {
-    setBusy("Signing out");
+    setOperation("signingOut");
     setError(null);
     setAuthError(null);
     setCanRetryRefresh(false);
@@ -273,7 +289,7 @@ export function RequesterWorkspace() {
     } catch (caught) {
       setAuthError(authErrorMessageFromCaught(caught, "Sign out failed"));
     } finally {
-      setBusy(null);
+      setOperation("idle");
     }
   };
 
@@ -335,7 +351,7 @@ export function RequesterWorkspace() {
       return;
     }
 
-    setBusy("Refreshing workspace");
+    setOperation("refreshingWorkspace");
     setError(null);
     setNotice(null);
 
@@ -357,7 +373,7 @@ export function RequesterWorkspace() {
       setCanRetryRefresh(true);
     } finally {
       if (selectedStudyIdRef.current === studyId) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   };
@@ -369,7 +385,7 @@ export function RequesterWorkspace() {
       return;
     }
 
-    setBusy("Creating draft");
+    setOperation("creatingDraft");
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
@@ -401,7 +417,7 @@ export function RequesterWorkspace() {
       setError(commandExceptionError("createDraft"));
     } finally {
       if (selectedStudyIdRef.current === studyId) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   };
@@ -413,7 +429,7 @@ export function RequesterWorkspace() {
       return;
     }
 
-    setBusy("Saving draft");
+    setOperation("savingDraft");
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
@@ -447,7 +463,7 @@ export function RequesterWorkspace() {
       setError(commandExceptionError("saveDraft"));
     } finally {
       if (selectedStudyIdRef.current === studyId) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   };
@@ -459,7 +475,7 @@ export function RequesterWorkspace() {
       return;
     }
 
-    setBusy("Submitting request");
+    setOperation("submittingRequest");
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
@@ -503,13 +519,13 @@ export function RequesterWorkspace() {
       setError(commandExceptionError("submitRequest"));
     } finally {
       if (selectedStudyIdRef.current === studyId) {
-        setBusy(null);
+        setOperation("idle");
       }
     }
   };
 
   const updateDraft = (field: keyof DraftForm, value: string) => {
-    if (draftCommandInFlight) {
+    if (!draftFieldsEditable) {
       return;
     }
 
@@ -523,11 +539,11 @@ export function RequesterWorkspace() {
     <main className="app-shell">
       <RequesterHeader
         actor={actor}
-        busy={Boolean(busy)}
+        busy={operationActive}
         onSignOut={() => void signOut()}
       />
 
-      {busy ? <p className="status-line">{busy}</p> : null}
+      {operationStatus ? <p className="status-line">{operationStatus}</p> : null}
       {notice ? <p className="notice" role="status">{notice}</p> : null}
       {authError ? (
         <p className="error-banner" role="alert">
@@ -540,7 +556,7 @@ export function RequesterWorkspace() {
           authEmail={authEmail}
           authName={authName}
           authPassword={authPassword}
-          busy={Boolean(busy)}
+          busy={operationActive}
           onAuthenticate={(mode) => void authenticate(mode)}
           onAuthEmailChange={setAuthEmail}
           onAuthNameChange={setAuthName}
@@ -549,7 +565,7 @@ export function RequesterWorkspace() {
         <div className="workspace-grid">
           <StudyPanel
             access={access}
-            busy={Boolean(busy)}
+            busy={operationActive}
             canRetryRefresh={canRetryRefresh}
             selectedStudy={selectedStudy}
             selectedStudyId={selectedStudyId}
@@ -559,8 +575,9 @@ export function RequesterWorkspace() {
           />
           <RequestPanel
             access={access}
-            busy={Boolean(busy)}
+            busy={operationActive}
             canRetryRefresh={canRetryRefresh}
+            draftFieldsEditable={draftFieldsEditable}
             draftCommandInFlight={draftCommandInFlight}
             draftForm={draftForm}
             draftId={draftId}

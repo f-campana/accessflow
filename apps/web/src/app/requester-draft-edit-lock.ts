@@ -1,10 +1,17 @@
-export const isDraftCommandInFlight = (busy: string | null) =>
-  busy === "Saving draft" || busy === "Submitting request";
+import {
+  isDraftCommandOperation,
+  type RequesterOperation
+} from "./requester-operation-state";
+
+export const isDraftCommandInFlight = (operation: RequesterOperation) =>
+  isDraftCommandOperation(operation);
 
 export const canEditDraftFields = ({
-  busy,
+  canRetryRefresh,
+  operation,
   isDraft
 }: {
-  busy: string | null;
+  canRetryRefresh: boolean;
+  operation: RequesterOperation;
   isDraft: boolean;
-}) => isDraft && !isDraftCommandInFlight(busy);
+}) => isDraft && !canRetryRefresh && !isDraftCommandInFlight(operation);
