@@ -1,5 +1,4 @@
 import { err, invalidTransition, ok, type Result } from "@accessflow/core";
-import { createMachine, getNextSnapshot, type SnapshotFrom } from "xstate";
 
 export const studyAccessRequestStatuses = [
   "draft",
@@ -47,39 +46,6 @@ export const workflowTransitions = [
   }
 ] as const satisfies readonly WorkflowTransition[];
 
-export const studyAccessWorkflowMachine = createMachine({
-  types: {} as {
-    events: WorkflowEvent;
-  },
-  id: "studyAccessRequest",
-  initial: "draft",
-  states: {
-    draft: {
-      on: {
-        submitRequest: "submitted"
-      }
-    },
-    submitted: {
-      on: {}
-    },
-    under_review: {},
-    approved: {},
-    rejected: {},
-    withdrawn: {},
-    revoked: {}
-  }
-});
-
-type WorkflowSnapshot = SnapshotFrom<typeof studyAccessWorkflowMachine>;
-
-const snapshotForStatus = (
-  status: StudyAccessRequestStatus
-): WorkflowSnapshot =>
-  studyAccessWorkflowMachine.resolveState({
-    value: status,
-    context: {}
-  });
-
 export const transitionWorkflowStatus = (
   from: StudyAccessRequestStatus,
   eventType: WorkflowEventType
@@ -90,18 +56,6 @@ export const transitionWorkflowStatus = (
   );
 
   if (!configuredTransition) {
-    return err(
-      invalidTransition(`Cannot apply ${eventType} while request is ${from}`)
-    );
-  }
-
-  const currentSnapshot = snapshotForStatus(from);
-  const nextSnapshot = getNextSnapshot(studyAccessWorkflowMachine, currentSnapshot, {
-    type: eventType
-  });
-  const to = nextSnapshot.value as StudyAccessRequestStatus;
-
-  if (to !== configuredTransition.to) {
     return err(
       invalidTransition(`Cannot apply ${eventType} while request is ${from}`)
     );

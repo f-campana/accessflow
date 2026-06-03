@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activeStudyAccessRequestStatuses,
   allowedWorkflowTransitionsFrom,
   isWorkflowTransitionAllowed,
   studyAccessRequestStatuses,
@@ -15,19 +16,22 @@ const allowedTransitions: Array<{
   from: StudyAccessRequestStatus;
   eventType: WorkflowEventType;
   to: StudyAccessRequestStatus;
-}> = [
-  { from: "draft", eventType: "submitRequest", to: "submitted" }
-];
+}> = [...workflowTransitions];
 
 const rejectedTransitions: Array<{
   from: StudyAccessRequestStatus;
   eventType: WorkflowEventType;
-}> = [
-  { from: "submitted", eventType: "submitRequest" },
-  { from: "under_review", eventType: "submitRequest" },
-  { from: "withdrawn", eventType: "submitRequest" },
-  { from: "revoked", eventType: "submitRequest" }
-];
+}> = studyAccessRequestStatuses.flatMap((from) =>
+  workflowEventTypes
+    .filter(
+      (eventType) =>
+        !workflowTransitions.some(
+          (transition) =>
+            transition.from === from && transition.eventType === eventType
+        )
+    )
+    .map((eventType) => ({ from, eventType }))
+);
 
 describe("study access workflow transitions", () => {
   it.each(allowedTransitions)(
@@ -74,6 +78,49 @@ describe("study access workflow transitions", () => {
       expect(events.has(transition.eventType)).toBe(true);
       expect(statuses.has(transition.from)).toBe(true);
       expect(statuses.has(transition.to)).toBe(true);
+    }
+  });
+
+  it("keeps active statuses aligned with status vocabulary", () => {
+    const statuses = new Set<string>(studyAccessRequestStatuses);
+
+    for (const status of activeStudyAccessRequestStatuses) {
+      expect(statuses.has(status)).toBe(true);
+    }
+  });
+
+  it("has only one transition target for each status and event pair", () => {
+    const transitionKeys = new Set<string>();
+
+    for (const transition of workflowTransitions) {
+      const key = `${transition.from}:${transition.eventType}`;
+
+      expect(transitionKeys.has(key)).toBe(false);
+      transitionKeys.add(key);
+    }
+  });
+
+  it("uses workflowTransitions as the canonical transition source", () => {
+    for (const from of studyAccessRequestStatuses) {
+      for (const eventType of workflowEventTypes) {
+        const configuredTransition = workflowTransitions.find(
+          (transition) =>
+            transition.from === from && transition.eventType === eventType
+        );
+        const result = transitionWorkflowStatus(from, eventType);
+
+        if (configuredTransition) {
+          expect(result).toEqual({
+            ok: true,
+            value: configuredTransition
+          });
+        } else {
+          expect(result.ok).toBe(false);
+          if (!result.ok) {
+            expect(result.error.code).toBe("InvalidTransition");
+          }
+        }
+      }
     }
   });
 });

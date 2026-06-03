@@ -474,7 +474,7 @@ Plain summary: save and submit no longer each rebuild the same locked draft quer
 
 Lesson: duplication around persistence shape is easy to miss because it looks like harmless column wiring. Once two commands need the same locked row, extract the row reader and patch builders so future workflow changes do not drift.
 
-### 23. [ ] Remove Duplicate Workflow Transition Sources
+### 23. [x] Remove Duplicate Workflow Transition Sources
 
 Issue: the workflow package stores transitions in `workflowTransitions` and repeats them in the XState machine, then casts `nextSnapshot.value` back to `StudyAccessRequestStatus`.
 
@@ -487,6 +487,12 @@ Done when:
 - transition legality has one canonical source
 - no cast is needed to trust the next status
 - workflow tests prove state vocabulary and transition vocabulary stay aligned
+
+Completed 2026-06-03: removed the XState machine from `@accessflow/workflow`, removed the unsafe `nextSnapshot.value as StudyAccessRequestStatus` cast, and made `workflowTransitions` the single canonical transition source. Removed the now-unused `xstate` package dependency and lockfile entries. Expanded workflow tests so allowed cases derive from `workflowTransitions`, every other status/event pair is rejected, active statuses stay inside the status vocabulary, duplicate status/event transition keys are rejected, and `transitionWorkflowStatus` always matches the canonical table. Verification: `pnpm --filter @accessflow/workflow lint`, `pnpm --filter @accessflow/workflow typecheck`, `pnpm --filter @accessflow/workflow test`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: the workflow package no longer has two competing transition graphs. There is one transition table, and the transition helper simply follows that table.
+
+Lesson: a state machine library is useful when it owns meaningful behavior. If a small workflow is already modeled as a typed transition table, duplicating it in a second machine adds drift risk without adding clarity.
 
 ### 24. [ ] Reuse One Requested Role Parser Everywhere
 
