@@ -20,7 +20,11 @@ import {
   studyAccessRequests
 } from "../../db/schema";
 import { hashPayload, resolveIdempotencyReplay } from "../idempotency";
-import { submitRequestInputSchema } from "../validation";
+import {
+  submitRequestInputSchema,
+  type SubmitRequestInput,
+  type SubmitRequestInputFieldName
+} from "../validation";
 import { ensureRequester } from "./authorization";
 import {
   abortCommand,
@@ -48,7 +52,9 @@ export const submitRequest = async (
     return actorResult;
   }
 
-  const parsed = fromZod(submitRequestInputSchema.safeParse(input));
+  const parsed = fromZod<SubmitRequestInput, SubmitRequestInputFieldName>(
+    submitRequestInputSchema.safeParse(input)
+  );
   if (!parsed.ok) {
     return parsed;
   }

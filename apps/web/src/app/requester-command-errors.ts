@@ -1,7 +1,4 @@
-type RequesterCommandError = {
-  code: "Unexpected";
-  message: string;
-};
+import { unexpected, type NonValidationAppError } from "@accessflow/core";
 
 type CommandAction = "createDraft" | "saveDraft" | "submitRequest";
 
@@ -25,19 +22,11 @@ const reloadFailureMessages = {
 
 export const commandExceptionError = (
   action: CommandAction
-): RequesterCommandError => ({
-  code: "Unexpected",
-  message: commandFailureMessages[action]
-});
+): NonValidationAppError => unexpected(commandFailureMessages[action]);
 
 export const commandReloadError = (
   action: CommandAction
-): RequesterCommandError => ({
-  code: "Unexpected",
-  message: reloadFailureMessages[action]
-});
+): NonValidationAppError => unexpected(reloadFailureMessages[action]);
 
-export const refreshRetryError = (): RequesterCommandError => ({
-  code: "Unexpected",
-  message: "Workspace could not refresh. Retry again before continuing."
-});
+export const refreshRetryError = (): NonValidationAppError =>
+  unexpected("Workspace could not refresh. Retry again before continuing.");

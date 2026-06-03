@@ -24,80 +24,100 @@ export const appErrorCodes = [
 
 export type AppErrorCode = (typeof appErrorCodes)[number];
 
-export type FieldErrors = Record<string, string[]>;
+export type FieldErrors<FieldName extends string = string> = Partial<
+  Record<FieldName, string[]>
+>;
 
-export type AppError = {
-  code: AppErrorCode;
+export type ValidationAppError<FieldName extends string = string> = {
+  code: "ValidationError";
   message: string;
-  formErrors?: string[];
-  fieldErrors?: FieldErrors;
+  formErrors: string[];
+  fieldErrors: FieldErrors<FieldName>;
 };
 
+export type NonValidationAppErrorCode = Exclude<
+  AppErrorCode,
+  "ValidationError"
+>;
+
+export type NonValidationAppError = {
+  code: NonValidationAppErrorCode;
+  message: string;
+};
+
+export type AppError<FieldName extends string = string> =
+  | ValidationAppError<FieldName>
+  | NonValidationAppError;
+
 export const appError = (
-  code: AppErrorCode,
-  message: string,
-  options: { formErrors?: string[]; fieldErrors?: FieldErrors } = {}
-): AppError => ({
+  code: NonValidationAppErrorCode,
+  message: string
+): NonValidationAppError => ({
   code,
-  message,
-  ...(options.formErrors?.length ? { formErrors: options.formErrors } : {}),
-  ...(options.fieldErrors ? { fieldErrors: options.fieldErrors } : {})
+  message
 });
 
-export const validationError = (
+export const validationError = <FieldName extends string = string>(
   message = "Validation failed",
-  options: { formErrors?: string[]; fieldErrors?: FieldErrors } = {}
-): AppError =>
-  options.formErrors?.length || options.fieldErrors
-    ? appError("ValidationError", message, options)
-    : appError("ValidationError", message);
+  options: {
+    formErrors?: string[];
+    fieldErrors?: FieldErrors<FieldName>;
+  } = {}
+): ValidationAppError<FieldName> => ({
+  code: "ValidationError",
+  message,
+  formErrors: options.formErrors ?? [],
+  fieldErrors: options.fieldErrors ?? {}
+});
 
-export const unauthorized = (message = "Authentication required"): AppError =>
+export const unauthorized = (
+  message = "Authentication required"
+): NonValidationAppError =>
   appError("Unauthorized", message);
 
-export const forbidden = (message = "Permission denied"): AppError =>
+export const forbidden = (message = "Permission denied"): NonValidationAppError =>
   appError("Forbidden", message);
 
-export const notFound = (message = "Not found"): AppError =>
+export const notFound = (message = "Not found"): NonValidationAppError =>
   appError("NotFound", message);
 
-export const invalidTransition = (message: string): AppError =>
+export const invalidTransition = (message: string): NonValidationAppError =>
   appError("InvalidTransition", message);
 
 export const idempotencyConflict = (
   message = "Idempotency key was reused with a different payload"
-): AppError => appError("IdempotencyConflict", message);
+): NonValidationAppError => appError("IdempotencyConflict", message);
 
-export const conflict = (message = "Conflict"): AppError =>
+export const conflict = (message = "Conflict"): NonValidationAppError =>
   appError("Conflict", message);
 
-export const unexpected = (message = "Unexpected error"): AppError =>
+export const unexpected = (message = "Unexpected error"): NonValidationAppError =>
   appError("Unexpected", message);
 
 type ZodSafeParseResult<T> =
   | { success: true; data: T }
   | { success: false; error: z.ZodError };
 
-export const fromZod = <T>(result: ZodSafeParseResult<T>): Result<T> => {
+export const fromZod = <T, FieldName extends string = string>(
+  result: ZodSafeParseResult<T>
+): Result<T, ValidationAppError<FieldName>> => {
   if (result.success) {
     return ok(result.data);
   }
 
-  const fieldErrors: FieldErrors = {};
+  const fieldErrors: FieldErrors<FieldName> = {};
   const flattened = result.error.flatten();
 
   for (const [field, messages] of Object.entries(flattened.fieldErrors)) {
     if (Array.isArray(messages) && messages.length > 0) {
-      fieldErrors[field] = messages;
+      fieldErrors[field as FieldName] = messages;
     }
   }
 
   return err(
     validationError("Validation failed", {
-      ...(Object.keys(fieldErrors).length > 0 ? { fieldErrors } : {}),
-      ...(flattened.formErrors.length > 0
-        ? { formErrors: flattened.formErrors }
-        : {})
+      fieldErrors,
+      formErrors: flattened.formErrors
     })
   );
 };

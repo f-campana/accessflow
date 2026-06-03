@@ -57,7 +57,8 @@ type CommandValidationFailure = {
   error: {
     code: "ValidationError";
     message: string;
-    fieldErrors?: Record<string, string[]>;
+    fieldErrors: Record<string, string[]>;
+    formErrors: string[];
   };
 };
 
@@ -134,7 +135,9 @@ const expectCommandValidationFailure = async (
     expect.objectContaining({
       ok: false,
       error: expect.objectContaining({
-        code: "ValidationError"
+        code: "ValidationError",
+        fieldErrors: expect.any(Object),
+        formErrors: expect.any(Array)
       })
     })
   );

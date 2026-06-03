@@ -3,10 +3,18 @@ import { describe, expect, it } from "vitest";
 import { appErrorTitle } from "./requester-error-copy";
 import type { AppError } from "./requester-workspace-model";
 
-const errorWithCode = (code: AppError["code"]): AppError => ({
-  code,
-  message: "Server message"
-});
+const errorWithCode = (code: AppError["code"]): AppError =>
+  code === "ValidationError"
+    ? {
+        code,
+        message: "Server message",
+        fieldErrors: {},
+        formErrors: []
+      }
+    : {
+        code,
+        message: "Server message"
+      };
 
 describe("requester error copy", () => {
   it("maps implementation error codes to user-facing titles", () => {

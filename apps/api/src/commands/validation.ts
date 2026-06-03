@@ -71,3 +71,7 @@ export type CreateDraftInput = z.infer<typeof createDraftInputSchema>;
 export type SaveDraftInput = z.infer<typeof saveDraftInputSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestInputSchema>;
 export type FinalDraftFields = z.infer<typeof finalDraftFieldsSchema>;
+export type DraftFieldName = keyof DraftFields;
+export type CreateDraftInputFieldName = keyof CreateDraftInput;
+export type SaveDraftInputFieldName = keyof SaveDraftInput;
+export type SubmitRequestInputFieldName = keyof SubmitRequestInput;

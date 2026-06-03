@@ -21,7 +21,11 @@ import {
   studyAccessRequestDrafts,
   studyAccessRequests
 } from "../../db/schema";
-import { createDraftInputSchema } from "../validation";
+import {
+  createDraftInputSchema,
+  type CreateDraftInput,
+  type CreateDraftInputFieldName
+} from "../validation";
 import type { CommandDependencies } from "../types";
 import { ensureRequester } from "./authorization";
 import {
@@ -126,7 +130,9 @@ export const createDraft = async (
     return actorResult;
   }
 
-  const parsed = fromZod(createDraftInputSchema.safeParse(input));
+  const parsed = fromZod<CreateDraftInput, CreateDraftInputFieldName>(
+    createDraftInputSchema.safeParse(input)
+  );
   if (!parsed.ok) {
     return parsed;
   }

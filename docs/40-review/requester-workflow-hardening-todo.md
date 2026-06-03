@@ -514,7 +514,7 @@ Plain summary: requested-role validity now comes from one workflow parser instea
 
 Lesson: shared vocabulary is not enough if every layer parses it differently. Put the parser next to the vocabulary, then make each boundary choose whether invalid values should fail closed or normalize to an empty UI value.
 
-### 25. [ ] Make `AppError` A Real Discriminated Union
+### 25. [x] Make `AppError` A Real Discriminated Union
 
 Issue: `AppError` allows `formErrors` and `fieldErrors` on every error code. Non-validation errors can carry field errors, and validation errors can omit them.
 
@@ -527,6 +527,12 @@ Done when:
 - TypeScript rejects field errors on non-validation errors
 - requester field errors use a field vocabulary instead of arbitrary strings where practical
 - command and UI tests still prove friendly error rendering
+
+Completed 2026-06-03: changed `AppError` into a discriminated union with a dedicated `ValidationError` variant that always carries `fieldErrors` and `formErrors`, while non-validation variants only carry `code` and `message`. Added typed field-error maps, narrowed core non-validation constructors, typed API command validation fields by command input, typed requester UI errors by draft field name, and made the requester form read field/form errors only after narrowing to `ValidationError`. Added compile-time `@ts-expect-error` checks for invalid error states and updated API/web tests around validation and friendly error rendering. Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: field errors now belong only to validation errors. Other errors, like auth failures, conflicts, and unexpected failures, cannot accidentally pretend to be form-validation results.
+
+Lesson: typed error codes are strongest when each code has its own shape. A broad optional bag is flexible, but it makes impossible states look normal and pushes defensive checks into every UI.
 
 ### 26. [ ] Add Error Focus And Live-Region Behavior
 

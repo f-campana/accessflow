@@ -46,6 +46,9 @@ describe("submitRequest", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ValidationError");
+      if (result.error.code !== "ValidationError") {
+        throw new Error("Expected validation error");
+      }
       expect(result.error.formErrors).toEqual([
         "Complete the draft before submitting the access request."
       ]);

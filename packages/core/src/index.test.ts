@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { fromZod, invalidTransition, ok } from ".";
+import {
+  fromZod,
+  invalidTransition,
+  ok,
+  unexpected,
+  validationError,
+  type AppError
+} from ".";
 
 describe("Result helpers", () => {
   it("creates successful result values", () => {
@@ -12,6 +19,15 @@ describe("Result helpers", () => {
     expect(invalidTransition("No transition")).toEqual({
       code: "InvalidTransition",
       message: "No transition"
+    });
+  });
+
+  it("keeps validation details on the validation error variant", () => {
+    expect(validationError()).toEqual({
+      code: "ValidationError",
+      message: "Validation failed",
+      fieldErrors: {},
+      formErrors: []
     });
   });
 
@@ -41,5 +57,18 @@ describe("Result helpers", () => {
     if (!result.ok) {
       expect(result.error.formErrors).toEqual(["Values must be different"]);
     }
+  });
+
+  it("makes invalid error states unrepresentable to TypeScript", () => {
+    const nonValidationError = unexpected();
+
+    // @ts-expect-error Non-validation errors do not expose field errors.
+    const _fieldErrors = nonValidationError.fieldErrors;
+
+    // @ts-expect-error Validation errors must carry validation details.
+    const _incompleteValidationError: AppError = {
+      code: "ValidationError",
+      message: "Incomplete"
+    };
   });
 });

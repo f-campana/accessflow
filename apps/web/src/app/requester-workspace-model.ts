@@ -1,5 +1,5 @@
 import type { trpc } from "../trpc/client";
-import type { AppError } from "@accessflow/core";
+import type { AppError as CoreAppError } from "@accessflow/core";
 import {
   parseRequestedStudyRole,
   type RequestedStudyRole
@@ -17,7 +17,8 @@ export type DraftForm = {
   supportingNotes: string;
 };
 
-export type { AppError };
+export type RequesterDraftFieldName = keyof DraftForm;
+export type AppError = CoreAppError<RequesterDraftFieldName>;
 
 export type StudyAccess = Awaited<
   ReturnType<(typeof trpc)["myStudyAccess"]["query"]>

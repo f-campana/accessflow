@@ -13,7 +13,12 @@ import {
 
 import type { AuthenticatedActor } from "../../context";
 import { studyAccessRequestDrafts } from "../../db/schema";
-import { saveDraftInputSchema, type DraftFields } from "../validation";
+import {
+  saveDraftInputSchema,
+  type DraftFields,
+  type SaveDraftInput,
+  type SaveDraftInputFieldName
+} from "../validation";
 import { ensureRequester } from "./authorization";
 import { defaultDependencies, rollbackCommandError } from "./command-transaction";
 import { draftPatchValues, mergeDraftFields } from "./draft-fields";
@@ -36,7 +41,9 @@ export const saveDraft = async (
     return actorResult;
   }
 
-  const parsed = fromZod(saveDraftInputSchema.safeParse(input));
+  const parsed = fromZod<SaveDraftInput, SaveDraftInputFieldName>(
+    saveDraftInputSchema.safeParse(input)
+  );
   if (!parsed.ok) {
     return parsed;
   }

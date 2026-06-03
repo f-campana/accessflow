@@ -7,6 +7,7 @@ import type {
   Study,
   StudyAccess
 } from "./requester-workspace-model";
+import type { FieldErrors } from "@accessflow/core";
 import {
   parseRequestedStudyRole,
   requestedStudyRoles,
@@ -256,6 +257,8 @@ export function RequestPanel({
   onSubmitRequest,
   onUpdateDraft
 }: RequestPanelProps) {
+  const validationError = error?.code === "ValidationError" ? error : null;
+
   return (
     <section className="panel request-panel" aria-labelledby="request-title">
       <div className="section-heading">
@@ -294,7 +297,7 @@ export function RequestPanel({
             <textarea
               {...draftFieldAccessibilityProps({
                 field: "purpose",
-                error: firstFieldError(error?.fieldErrors, "purpose")
+                error: firstFieldError(validationError?.fieldErrors, "purpose")
               })}
               value={draftForm.purpose}
               onChange={(event) => onUpdateDraft("purpose", event.target.value)}
@@ -303,7 +306,7 @@ export function RequestPanel({
             />
             <FieldError
               field="purpose"
-              error={firstFieldError(error?.fieldErrors, "purpose")}
+              error={firstFieldError(validationError?.fieldErrors, "purpose")}
             />
           </label>
 
@@ -312,7 +315,10 @@ export function RequestPanel({
             <select
               {...draftFieldAccessibilityProps({
                 field: "requestedRole",
-                error: firstFieldError(error?.fieldErrors, "requestedRole")
+                error: firstFieldError(
+                  validationError?.fieldErrors,
+                  "requestedRole"
+                )
               })}
               value={draftForm.requestedRole}
               onChange={(event) =>
@@ -332,7 +338,10 @@ export function RequestPanel({
             </select>
             <FieldError
               field="requestedRole"
-              error={firstFieldError(error?.fieldErrors, "requestedRole")}
+              error={firstFieldError(
+                validationError?.fieldErrors,
+                "requestedRole"
+              )}
             />
           </label>
 
@@ -341,7 +350,10 @@ export function RequestPanel({
             <textarea
               {...draftFieldAccessibilityProps({
                 field: "justification",
-                error: firstFieldError(error?.fieldErrors, "justification")
+                error: firstFieldError(
+                  validationError?.fieldErrors,
+                  "justification"
+                )
               })}
               value={draftForm.justification}
               onChange={(event) =>
@@ -352,7 +364,10 @@ export function RequestPanel({
             />
             <FieldError
               field="justification"
-              error={firstFieldError(error?.fieldErrors, "justification")}
+              error={firstFieldError(
+                validationError?.fieldErrors,
+                "justification"
+              )}
             />
           </label>
 
@@ -361,7 +376,10 @@ export function RequestPanel({
             <input
               {...draftFieldAccessibilityProps({
                 field: "affiliation",
-                error: firstFieldError(error?.fieldErrors, "affiliation")
+                error: firstFieldError(
+                  validationError?.fieldErrors,
+                  "affiliation"
+                )
               })}
               value={draftForm.affiliation}
               onChange={(event) =>
@@ -371,7 +389,10 @@ export function RequestPanel({
             />
             <FieldError
               field="affiliation"
-              error={firstFieldError(error?.fieldErrors, "affiliation")}
+              error={firstFieldError(
+                validationError?.fieldErrors,
+                "affiliation"
+              )}
             />
           </label>
 
@@ -434,11 +455,13 @@ function CommandError({
     return null;
   }
 
+  const formErrors = error.code === "ValidationError" ? error.formErrors : [];
+
   return (
     <div className="command-error" role="alert">
       <strong>{appErrorTitle(error)}</strong>
       <span>{error.message}</span>
-      {error.formErrors?.map((formError) => (
+      {formErrors.map((formError) => (
         <span key={formError}>{formError}</span>
       ))}
       {canRetryRefresh ? (
@@ -493,7 +516,7 @@ export function AuditTimelinePanel({ access }: AuditTimelinePanelProps) {
 }
 
 const firstFieldError = (
-  fieldErrors: Record<string, string[]> | undefined,
+  fieldErrors: FieldErrors<DraftFieldName> | undefined,
   field: keyof DraftForm
 ) => fieldErrors?.[field]?.[0] ?? null;
 

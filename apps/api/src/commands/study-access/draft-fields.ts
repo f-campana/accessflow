@@ -13,6 +13,7 @@ import { parsePersistedRequestedStudyRole } from "@accessflow/workflow";
 
 import {
   finalDraftFieldsSchema,
+  type DraftFieldName,
   type DraftFields,
   type FinalDraftFields
 } from "../validation";
@@ -114,25 +115,19 @@ export const validateFinalDraft = (
     return ok(parsed.data);
   }
 
-  const base = fromZod<FinalDraftFields>(parsed);
+  const base = fromZod<FinalDraftFields, DraftFieldName>(parsed);
 
   if (base.ok) {
     return base;
   }
 
-  const validationOptions = base.error.fieldErrors
-    ? {
-        fieldErrors: base.error.fieldErrors,
-        formErrors: ["Complete the draft before submitting the access request."]
-      }
-    : {
-        formErrors: ["Complete the draft before submitting the access request."]
-      };
-
   return err(
     validationError(
       "Draft is missing required submission fields",
-      validationOptions
+      {
+        fieldErrors: base.error.fieldErrors,
+        formErrors: ["Complete the draft before submitting the access request."]
+      }
     )
   );
 };
