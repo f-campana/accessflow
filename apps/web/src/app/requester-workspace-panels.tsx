@@ -8,12 +8,22 @@ import type {
   StudyAccess
 } from "./requester-workspace-model";
 import {
+  parseRequestedStudyRole,
+  requestedStudyRoles,
+  type RequestedStudyRole
+} from "@accessflow/workflow";
+import {
   draftFieldAccessibilityProps,
   draftFieldErrorId,
   type DraftFieldName
 } from "./requester-field-accessibility";
 import { appErrorTitle } from "./requester-error-copy";
 import { compactId } from "./requester-workspace-model";
+
+const requestedStudyRoleLabels = {
+  analyst: "Analyst",
+  viewer: "Viewer"
+} satisfies Record<RequestedStudyRole, string>;
 
 type AuthMode = "sign-up/email" | "sign-in/email";
 
@@ -306,13 +316,19 @@ export function RequestPanel({
               })}
               value={draftForm.requestedRole}
               onChange={(event) =>
-                onUpdateDraft("requestedRole", event.target.value)
+                onUpdateDraft(
+                  "requestedRole",
+                  parseRequestedStudyRole(event.target.value) ?? ""
+                )
               }
               disabled={!draftFieldsEditable}
             >
               <option value="">Select role</option>
-              <option value="viewer">Viewer</option>
-              <option value="analyst">Analyst</option>
+              {requestedStudyRoles.map((role) => (
+                <option key={role} value={role}>
+                  {requestedStudyRoleLabels[role]}
+                </option>
+              ))}
             </select>
             <FieldError
               field="requestedRole"

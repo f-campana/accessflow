@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { requestedStudyRoles } from "@accessflow/workflow";
+import {
+  isRequestedStudyRole,
+  parseRequestedStudyRole,
+  type RequestedStudyRole
+} from "@accessflow/workflow";
 
 const optionalDraftText = (max: number) =>
   z
@@ -17,9 +21,25 @@ const requiredSubmissionText = (fieldName: string, max: number) =>
     .min(1, `${fieldName} is required`)
     .max(max);
 
+const requestedStudyRoleInputSchema = z
+  .string()
+  .trim()
+  .refine(isRequestedStudyRole, {
+    error: "Requested role is required"
+  })
+  .transform((value): RequestedStudyRole => {
+    const role = parseRequestedStudyRole(value);
+
+    if (!role) {
+      throw new Error("Requested role parser rejected refined value");
+    }
+
+    return role;
+  });
+
 export const draftFieldsSchema = z.object({
   purpose: optionalDraftText(1_000),
-  requestedRole: z.enum(requestedStudyRoles).optional().nullable(),
+  requestedRole: requestedStudyRoleInputSchema.optional().nullable(),
   justification: optionalDraftText(2_000),
   affiliation: optionalDraftText(300),
   supportingNotes: optionalDraftText(2_000)
@@ -40,9 +60,7 @@ export const submitRequestInputSchema = draftFieldsSchema.extend({
 
 export const finalDraftFieldsSchema = z.object({
   purpose: requiredSubmissionText("Purpose", 1_000),
-  requestedRole: z.enum(requestedStudyRoles, {
-    error: "Requested role is required"
-  }),
+  requestedRole: requestedStudyRoleInputSchema,
   justification: requiredSubmissionText("Justification", 2_000),
   affiliation: requiredSubmissionText("Affiliation", 300),
   supportingNotes: optionalDraftText(2_000)

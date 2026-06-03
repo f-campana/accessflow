@@ -494,7 +494,7 @@ Plain summary: the workflow package no longer has two competing transition graph
 
 Lesson: a state machine library is useful when it owns meaningful behavior. If a small workflow is already modeled as a typed transition table, duplicating it in a second machine adds drift risk without adding clarity.
 
-### 24. [ ] Reuse One Requested Role Parser Everywhere
+### 24. [x] Reuse One Requested Role Parser Everywhere
 
 Issue: requested-role parsing is duplicated. Query mapping casts through `includes`, while persisted draft parsing hardcodes `z.enum(["viewer", "analyst"])`.
 
@@ -507,6 +507,12 @@ Done when:
 - no requester-role parser hardcodes a second role list
 - invalid persisted roles still fail safely
 - tests cover the shared parser
+
+Completed 2026-06-03: added `isRequestedStudyRole`, `parseRequestedStudyRole`, and `parsePersistedRequestedStudyRole` to `@accessflow/workflow`; reused them in API command validation, persisted draft parsing, requester query mapping, web draft-form normalization, and web requested-role select handling. Removed the hardcoded persisted `z.enum(["viewer", "analyst"])`, the query `requestedStudyRoles.includes` cast, and the web `viewer`/`analyst` equality check. Added workflow parser tests, API validation tests, API persisted draft parsing tests, and web draft model tests. Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+
+Plain summary: requested-role validity now comes from one workflow parser instead of scattered checks. The API, persisted reads, and web form all agree on which roles are valid.
+
+Lesson: shared vocabulary is not enough if every layer parses it differently. Put the parser next to the vocabulary, then make each boundary choose whether invalid values should fail closed or normalize to an empty UI value.
 
 ### 25. [ ] Make `AppError` A Real Discriminated Union
 

@@ -9,6 +9,7 @@ import {
   type AppError,
   type Result
 } from "@accessflow/core";
+import { parsePersistedRequestedStudyRole } from "@accessflow/workflow";
 
 import {
   finalDraftFieldsSchema,
@@ -49,7 +50,7 @@ export const mergeDraftFields = (
   supportingNotes:
     updates.supportingNotes !== undefined
       ? updates.supportingNotes
-    : current.supportingNotes
+      : current.supportingNotes
 });
 
 export const draftPatchValues = (draft: DraftFields, updatedAt: Date) => ({
@@ -80,7 +81,7 @@ export const readDraftFields = (draft: {
     z
       .object({
         purpose: z.string().nullable(),
-        requestedRole: z.enum(["viewer", "analyst"]).nullable(),
+        requestedRole: z.string().nullable(),
         justification: z.string().nullable(),
         affiliation: z.string().nullable(),
         supportingNotes: z.string().nullable()
@@ -92,7 +93,16 @@ export const readDraftFields = (draft: {
     return err(unexpected("Persisted draft data is invalid"));
   }
 
-  return parsed;
+  try {
+    return ok({
+      ...parsed.value,
+      requestedRole: parsePersistedRequestedStudyRole(
+        parsed.value.requestedRole
+      )
+    });
+  } catch {
+    return err(unexpected("Persisted draft data is invalid"));
+  }
 };
 
 export const validateFinalDraft = (

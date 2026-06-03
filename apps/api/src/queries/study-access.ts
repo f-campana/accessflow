@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   activeStudyAccessRequestStatuses,
-  requestedStudyRoles,
+  parsePersistedRequestedStudyRole,
   type RequestedStudyRole,
   type StudyAccessRequestStatus,
   type WorkflowEventType
@@ -17,20 +17,6 @@ import {
 } from "../db/schema";
 
 const toIso = (value: Date | null) => (value ? value.toISOString() : null);
-
-const toRequestedStudyRole = (
-  value: string | null
-): RequestedStudyRole | null => {
-  if (value === null) {
-    return null;
-  }
-
-  if (requestedStudyRoles.includes(value as RequestedStudyRole)) {
-    return value as RequestedStudyRole;
-  }
-
-  throw new Error("Persisted requested role is invalid");
-};
 
 export type StudySummary = {
   id: string;
@@ -148,7 +134,7 @@ export const getRequesterStudyAccess = async (
     request: {
       id: request.id,
       status: request.status,
-      requestedRole: toRequestedStudyRole(request.requestedRole),
+      requestedRole: parsePersistedRequestedStudyRole(request.requestedRole),
       submittedAt: toIso(request.submittedAt),
       decidedAt: toIso(request.decidedAt),
       decisionNote: request.decisionNote,
@@ -159,7 +145,7 @@ export const getRequesterStudyAccess = async (
       ? {
           id: draft.id,
           purpose: draft.purpose,
-          requestedRole: toRequestedStudyRole(draft.requestedRole),
+          requestedRole: parsePersistedRequestedStudyRole(draft.requestedRole),
           justification: draft.justification,
           affiliation: draft.affiliation,
           supportingNotes: draft.supportingNotes,

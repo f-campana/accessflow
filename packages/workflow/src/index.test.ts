@@ -4,6 +4,10 @@ import {
   activeStudyAccessRequestStatuses,
   allowedWorkflowTransitionsFrom,
   isWorkflowTransitionAllowed,
+  isRequestedStudyRole,
+  parsePersistedRequestedStudyRole,
+  parseRequestedStudyRole,
+  requestedStudyRoles,
   studyAccessRequestStatuses,
   transitionWorkflowStatus,
   workflowEventTypes,
@@ -122,5 +126,28 @@ describe("study access workflow transitions", () => {
         }
       }
     }
+  });
+});
+
+describe("requested study roles", () => {
+  it("parses only configured requested study roles", () => {
+    expect(requestedStudyRoles).toEqual(["viewer", "analyst"]);
+
+    for (const role of requestedStudyRoles) {
+      expect(isRequestedStudyRole(role)).toBe(true);
+      expect(parseRequestedStudyRole(role)).toBe(role);
+    }
+
+    expect(isRequestedStudyRole("admin")).toBe(false);
+    expect(parseRequestedStudyRole("admin")).toBeNull();
+    expect(parseRequestedStudyRole(null)).toBeNull();
+  });
+
+  it("keeps persisted role parsing fail-closed", () => {
+    expect(parsePersistedRequestedStudyRole(null)).toBeNull();
+    expect(parsePersistedRequestedStudyRole("viewer")).toBe("viewer");
+    expect(() => parsePersistedRequestedStudyRole("admin")).toThrow(
+      "Persisted requested role is invalid"
+    );
   });
 });

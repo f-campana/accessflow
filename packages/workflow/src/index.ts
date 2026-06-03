@@ -24,6 +24,34 @@ export const requestedStudyRoles = ["viewer", "analyst"] as const;
 
 export type RequestedStudyRole = (typeof requestedStudyRoles)[number];
 
+const requestedStudyRoleSet = new Set<string>(requestedStudyRoles);
+
+export const isRequestedStudyRole = (
+  value: unknown
+): value is RequestedStudyRole =>
+  typeof value === "string" && requestedStudyRoleSet.has(value);
+
+export const parseRequestedStudyRole = (
+  value: unknown
+): RequestedStudyRole | null =>
+  isRequestedStudyRole(value) ? value : null;
+
+export const parsePersistedRequestedStudyRole = (
+  value: string | null
+): RequestedStudyRole | null => {
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = parseRequestedStudyRole(value);
+
+  if (!parsed) {
+    throw new Error("Persisted requested role is invalid");
+  }
+
+  return parsed;
+};
+
 export const workflowEventTypes = ["submitRequest"] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];

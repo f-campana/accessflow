@@ -1,6 +1,9 @@
 import type { trpc } from "../trpc/client";
 import type { AppError } from "@accessflow/core";
-import type { RequestedStudyRole } from "@accessflow/workflow";
+import {
+  parseRequestedStudyRole,
+  type RequestedStudyRole
+} from "@accessflow/workflow";
 
 export type Actor = NonNullable<Awaited<ReturnType<(typeof trpc)["me"]["query"]>>>;
 
@@ -28,13 +31,13 @@ export const emptyDraftForm: DraftForm = {
   supportingNotes: ""
 };
 
+export const toDraftRequestedRole = (
+  value: unknown
+): DraftForm["requestedRole"] => parseRequestedStudyRole(value) ?? "";
+
 export const toDraftForm = (access: StudyAccess): DraftForm => ({
   purpose: access?.draft?.purpose ?? "",
-  requestedRole:
-    access?.draft?.requestedRole === "viewer" ||
-    access?.draft?.requestedRole === "analyst"
-      ? access.draft.requestedRole
-      : "",
+  requestedRole: toDraftRequestedRole(access?.draft?.requestedRole),
   justification: access?.draft?.justification ?? "",
   affiliation: access?.draft?.affiliation ?? "",
   supportingNotes: access?.draft?.supportingNotes ?? ""
