@@ -12,9 +12,14 @@ const uniqueRequesterEmail = () =>
   `requester-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`;
 
 const demoReviewer = demoAccounts.find((account) => account.role === "reviewer");
+const demoRequester = demoAccounts.find((account) => account.role === "requester");
 
 if (!demoReviewer) {
   throw new Error("Reviewer demo account seed is missing");
+}
+
+if (!demoRequester) {
+  throw new Error("Requester demo account seed is missing");
 }
 
 test.afterAll(async () => {
@@ -238,6 +243,97 @@ test("requester can submit a durable study access request", async ({ page }) => 
   expect(consoleMessages).toEqual([]);
 });
 
+test("requester sees rejected final state after reviewer decision", async ({
+  page
+}) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const rejectionReason = "Requester needs a narrower study scope.";
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.getByLabel("Email")).toHaveValue(demoRequester.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Create request draft" }).click();
+
+  await expect(page.getByText(/Draft .+ created\./)).toBeVisible();
+  await page
+    .getByLabel("Purpose")
+    .fill("Evaluate final-state visibility for requester decisions.");
+  await page.getByLabel("Requested role").selectOption("viewer");
+  await page
+    .getByLabel("Justification")
+    .fill("The requester needs a durable final-state review.");
+  await page.getByLabel("Affiliation").fill("AccessFlow E2E");
+  await page
+    .getByLabel("Supporting notes")
+    .fill("Requester should still see rejected state after sign-in.");
+  await page.getByRole("button", { name: "Submit request" }).click();
+
+  await expect(page.getByText(/Request .+ submitted\./)).toBeVisible();
+  await expect(page.getByText("submitted", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByText("No active session")).toBeVisible();
+
+  await page.goto("/reviewer");
+  await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const seededRequest = page
+    .getByRole("button")
+    .filter({ hasText: "Aurora Cardiometabolic Study" })
+    .filter({ hasText: demoRequester.email });
+
+  await expect(seededRequest).toBeVisible();
+  await seededRequest.click();
+  await page.getByRole("button", { name: "Start review" }).click();
+  await expect(page.getByText("Review started.")).toBeVisible();
+  await page.getByLabel("Rejection reason").fill(rejectionReason);
+  await page.getByRole("button", { name: "Reject request" }).click();
+  await expect(page.getByText("Request rejected.")).toBeVisible();
+  await expect(
+    page.getByLabel("Request record").getByText("rejected", { exact: true })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByText("No active reviewer session")).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByLabel("Email")).toHaveValue(demoRequester.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("Signed in with a requester session.")).toBeVisible();
+  await expect(page.getByText("rejected", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Rejected at .+/)).toBeVisible();
+  await expect(page.getByText("Decision note:")).toBeVisible();
+  await expect(page.getByText(rejectionReason)).toBeVisible();
+  await expect(page.getByText("submitRequest")).toBeVisible();
+  await expect(page.getByText("startReview")).toBeVisible();
+  await expect(page.getByText("rejectRequest")).toBeVisible();
+  await expect(page.getByText("under_review to rejected")).toBeVisible();
+  await expect(page.getByLabel("Purpose")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Submit request" })).toBeDisabled();
+  await expectNoHorizontalOverflow(page);
+
+  expect(consoleMessages).toEqual([]);
+});
+
 test("reviewer can reject an under-review request with a durable reason", async ({
   page
 }) => {
@@ -331,8 +427,8 @@ test("reviewer can reject an under-review request with a durable reason", async 
   await expect(page.getByText("submitRequest")).toBeVisible();
   await expect(page.getByText("draft to submitted")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /approve/i })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /reject/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.route("**/trpc/startReview**", async (route) => {

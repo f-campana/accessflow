@@ -20,6 +20,14 @@ export const activeStudyAccessRequestStatuses = [
   "approved"
 ] as const satisfies readonly StudyAccessRequestStatus[];
 
+export const requesterVisibleStudyAccessRequestStatuses = [
+  "draft",
+  "submitted",
+  "under_review",
+  "approved",
+  "rejected"
+] as const satisfies readonly StudyAccessRequestStatus[];
+
 export const requestedStudyRoles = ["viewer", "analyst"] as const;
 
 export type RequestedStudyRole = (typeof requestedStudyRoles)[number];

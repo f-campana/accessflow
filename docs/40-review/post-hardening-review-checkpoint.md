@@ -116,3 +116,9 @@ Reviewer decision workflow completed on 2026-06-05: `apps/api` now exposes revie
 Plain summary: reviewers can now move a submitted request into review, then approve or reject it. The UI only shows decision controls while the request is under review, and the audit timeline is still rendered from real database events.
 
 Lesson: a reviewer action should disappear only because the server returned a new persisted workflow state, not because the client hid it locally. Decision idempotency is still a separate future decision before adding retry-specific reviewer UX.
+
+Requester final-state visibility completed on 2026-06-05: requester reads now include rejected requests as visible final history without redefining rejected as an active request; the requester form stays read-only for approved/rejected outcomes; rejection notes and decision timestamps render beside the submitted timestamp; and the requester audit timeline shows the full submit/start-review/decision chain after sign-out/sign-in.
+
+Plain summary: a reviewer rejection no longer makes the request disappear for the requester. The requester can sign back in, see the final rejected state, read the reason, and confirm the durable audit events.
+
+Lesson: active workflow cardinality and requester-visible history are different concepts. A final rejected request should be visible to explain the decision, but it should not automatically block a future remediation path by being treated as active.

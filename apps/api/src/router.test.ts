@@ -338,6 +338,33 @@ describe("tRPC auth boundary", () => {
         ]
       })
     );
+
+    const requesterCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: submitted.requester
+    });
+
+    await expect(
+      requesterCaller.myStudyAccess({ studyId: submitted.study.id })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "approved",
+          decisionNote: null
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({ eventType: "startReview" }),
+          expect.objectContaining({
+            eventType: "approveRequest",
+            fromStatus: "under_review",
+            toStatus: "approved",
+            note: null
+          })
+        ]
+      })
+    );
   });
 
   it("lets reviewer users reject under-review requests with a durable note", async () => {
@@ -374,6 +401,33 @@ describe("tRPC auth boundary", () => {
 
     await expect(
       caller.reviewerStudyAccessDetail({ requestId: submitted.requestId })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "rejected",
+          decisionNote: reason
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({ eventType: "startReview" }),
+          expect.objectContaining({
+            eventType: "rejectRequest",
+            fromStatus: "under_review",
+            toStatus: "rejected",
+            note: reason
+          })
+        ]
+      })
+    );
+
+    const requesterCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: submitted.requester
+    });
+
+    await expect(
+      requesterCaller.myStudyAccess({ studyId: submitted.study.id })
     ).resolves.toEqual(
       expect.objectContaining({
         request: expect.objectContaining({

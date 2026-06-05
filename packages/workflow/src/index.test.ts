@@ -7,6 +7,7 @@ import {
   isRequestedStudyRole,
   parsePersistedRequestedStudyRole,
   parseRequestedStudyRole,
+  requesterVisibleStudyAccessRequestStatuses,
   requestedStudyRoles,
   studyAccessRequestStatuses,
   transitionWorkflowStatus,
@@ -114,6 +115,17 @@ describe("study access workflow transitions", () => {
     for (const status of activeStudyAccessRequestStatuses) {
       expect(statuses.has(status)).toBe(true);
     }
+  });
+
+  it("keeps requester-visible statuses aligned without making rejection active", () => {
+    const statuses = new Set<string>(studyAccessRequestStatuses);
+
+    for (const status of requesterVisibleStudyAccessRequestStatuses) {
+      expect(statuses.has(status)).toBe(true);
+    }
+
+    expect(requesterVisibleStudyAccessRequestStatuses).toContain("rejected");
+    expect(activeStudyAccessRequestStatuses).not.toContain("rejected");
   });
 
   it("has only one transition target for each status and event pair", () => {

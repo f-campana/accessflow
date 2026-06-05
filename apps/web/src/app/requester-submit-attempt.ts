@@ -14,6 +14,13 @@ type SubmitAttemptStudyAccess = {
   } | null;
 } | null;
 
+const submitConfirmedStatuses: readonly StudyAccessRequestStatus[] = [
+  "submitted",
+  "under_review",
+  "approved",
+  "rejected"
+];
+
 export const getOrCreateSubmitAttempt = (
   currentAttempt: SubmitAttempt | null,
   draftId: string,
@@ -54,6 +61,7 @@ export const isSubmitAttemptConfirmedSubmitted = (
 ): boolean =>
   Boolean(
     currentAttempt &&
-      access?.request.status === "submitted" &&
+      access &&
+      submitConfirmedStatuses.includes(access.request.status) &&
       access.draft?.id === currentAttempt.draftId
   );

@@ -53,15 +53,22 @@ describe("requester submit attempt", () => {
     ).toBe(attempt);
   });
 
-  it("clears the attempt only after reload confirms the same draft submitted", () => {
+  it("clears the attempt after reload confirms the same draft submitted or later", () => {
     const attempt = getOrCreateSubmitAttempt(null, "draft-1", () => "key-1");
 
-    expect(
-      reconcileSubmitAttempt(attempt, {
-        request: { status: "submitted" },
-        draft: { id: "draft-1" }
-      })
-    ).toBeNull();
+    for (const status of [
+      "submitted",
+      "under_review",
+      "approved",
+      "rejected"
+    ] as const) {
+      expect(
+        reconcileSubmitAttempt(attempt, {
+          request: { status },
+          draft: { id: "draft-1" }
+        })
+      ).toBeNull();
+    }
   });
 
   it("does not clear the attempt when reload returns no confirmed access", () => {
@@ -81,15 +88,22 @@ describe("requester submit attempt", () => {
     ).toBeNull();
   });
 
-  it("recognizes only the same submitted draft as a confirmed submit", () => {
+  it("recognizes only the same submitted-or-later draft as a confirmed submit", () => {
     const attempt = getOrCreateSubmitAttempt(null, "draft-1", () => "key-1");
 
-    expect(
-      isSubmitAttemptConfirmedSubmitted(attempt, {
-        request: { status: "submitted" },
-        draft: { id: "draft-1" }
-      })
-    ).toBe(true);
+    for (const status of [
+      "submitted",
+      "under_review",
+      "approved",
+      "rejected"
+    ] as const) {
+      expect(
+        isSubmitAttemptConfirmedSubmitted(attempt, {
+          request: { status },
+          draft: { id: "draft-1" }
+        })
+      ).toBe(true);
+    }
 
     expect(
       isSubmitAttemptConfirmedSubmitted(attempt, {

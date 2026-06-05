@@ -18,7 +18,7 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
-Current implementation scope is requester submission plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, requester audit timeline, reviewer inbox/detail reads, start review, approve request, reject request with reason, and reviewer audit timeline reads. Withdrawal, revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
+Current implementation scope is requester submission plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, requester audit timeline, requester approved/rejected final-state visibility, reviewer inbox/detail reads, start review, approve request, reject request with reason, and reviewer audit timeline reads. Withdrawal, revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
 
 ## Project Shape
 
@@ -96,7 +96,7 @@ For any user-visible web change, also run a real rendered smoke check before rep
 - Playwright/browser automation at desktop and mobile widths
 - iOS Simulator only when explicitly validating Safari/iPhone behavior
 
-The smoke check should cover the affected workflow, not only page load. For the requester path, verify seeded sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit event rendering after sign-out/sign-in, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
+The smoke check should cover the affected workflow, not only page load. For the requester path, verify seeded sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit event rendering after sign-out/sign-in, approved/rejected final-state visibility after reviewer decisions, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
 
 If dependencies change:
 

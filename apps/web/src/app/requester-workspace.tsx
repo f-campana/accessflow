@@ -74,7 +74,6 @@ export function RequesterWorkspace() {
             draftId={controller.draftId}
             error={controller.error}
             isDraft={controller.isDraft}
-            isSubmitted={controller.isSubmitted}
             onRetryRefresh={() => void actions.retrySelectedStudyRefresh()}
             onSaveDraft={() => void actions.saveDraft()}
             onSubmitRequest={() => void actions.submitRequest()}

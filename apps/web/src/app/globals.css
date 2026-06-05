@@ -440,6 +440,14 @@ label {
   overflow-wrap: anywhere;
 }
 
+.submitted-note p {
+  margin: 0;
+}
+
+.submitted-note p + p {
+  margin-top: 8px;
+}
+
 .timeline-list {
   display: grid;
   gap: 12px;

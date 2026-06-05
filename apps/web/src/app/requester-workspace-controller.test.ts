@@ -38,6 +38,18 @@ const submittedAccess = {
   auditEvents: []
 } as unknown as StudyAccess;
 
+const finalAccess = (status: "approved" | "rejected") =>
+  ({
+    request: {
+      id: "request-1",
+      status
+    },
+    draft: {
+      id: "draft-1"
+    },
+    auditEvents: []
+  }) as unknown as StudyAccess;
+
 describe("requester workspace controller state", () => {
   it("selects the current study and keeps idle state passive", () => {
     const state = deriveRequesterWorkspaceControllerState({
@@ -96,4 +108,21 @@ describe("requester workspace controller state", () => {
     expect(state.isSubmitted).toBe(true);
     expect(state.draftFieldsEditable).toBe(false);
   });
+
+  it.each(["approved", "rejected"] as const)(
+    "keeps %s requests visible but read-only",
+    (status) => {
+      const state = deriveRequesterWorkspaceControllerState({
+        access: finalAccess(status),
+        canRetryRefresh: false,
+        operation: "idle",
+        selectedStudyId: "study-1",
+        studies
+      });
+
+      expect(state.isDraft).toBe(false);
+      expect(state.isSubmitted).toBe(false);
+      expect(state.draftFieldsEditable).toBe(false);
+    }
+  );
 });

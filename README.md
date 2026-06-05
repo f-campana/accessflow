@@ -33,6 +33,8 @@ Implemented web coverage:
 - Real local sign-up/sign-in through the API auth path.
 - Study entry point backed by seeded Postgres data.
 - Draft creation, draft saving, submission, typed error rendering, persisted status, and audit timeline.
+- Requester visibility for approved/rejected final states after reviewer decisions,
+  including decision notes and full persisted audit history.
 - Reviewer queue/detail view for submitted, under-review, approved, and rejected
   requests, including start-review, approve, reject, decision note, and
   persisted audit timeline.
@@ -46,8 +48,8 @@ Current focus:
 Current implementation covers requester submission and reviewer decisions:
 
 ```text
-implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, persisted audit timelines
-next: review the reviewer decision slice and decide whether decision idempotency is needed now
+implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, requester final-state reads, persisted audit timelines
+next: review final-state behavior and decide whether decision idempotency is needed now
 later roadmap: withdrawal/revocation, admin inspection, broader operational surfaces
 ```
 
@@ -138,7 +140,7 @@ That command starts Postgres, applies API migrations, seeds the synthetic study 
 0 stale generated studies
 ```
 
-For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, reviewer start-review, reviewer approve/reject, readable auth errors, and no horizontal overflow at phone width.
+For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, reviewer start-review, reviewer approve/reject, requester visibility for approved/rejected final states, readable auth errors, and no horizontal overflow at phone width.
 
 For repeatable requester workflow browser coverage, install the Playwright browser once:
 

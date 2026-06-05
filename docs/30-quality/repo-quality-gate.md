@@ -87,8 +87,10 @@ For the requester path, verify:
 7. persisted `submitted` state
 8. audit timeline event
 9. sign-out/sign-in and refresh do not lie about workflow state
-10. no browser console errors or warnings
-11. no horizontal overflow at phone width
+10. approved/rejected final states remain visible after reviewer decisions
+11. rejection notes and decision audit events are visible to the requester
+12. no browser console errors or warnings
+13. no horizontal overflow at phone width
 
 For the reviewer path, verify:
 
@@ -116,7 +118,7 @@ First-time local setup may need:
 pnpm exec playwright install chromium
 ```
 
-The e2e gate starts the local Postgres/API/web stack through Playwright, runs mobile-width Chromium workflows, checks the requester happy path and empty-submit validation path, reloads to prove persisted requester state, verifies requester and reviewer audit timelines, exercises reviewer start/reject/approve paths, captures page errors/console warnings, and asserts no horizontal overflow.
+The e2e gate starts the local Postgres/API/web stack through Playwright, runs mobile-width Chromium workflows, checks the requester happy path and empty-submit validation path, reloads to prove persisted requester state, verifies requester and reviewer audit timelines, exercises reviewer start/reject/approve paths, verifies requester final-state visibility after reviewer rejection, captures page errors/console warnings, and asserts no horizontal overflow.
 
 The e2e startup resets the local preview database before seeding, so it should begin with one study, three demo users, and no existing access requests.
 

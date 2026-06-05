@@ -253,6 +253,7 @@ study entry point
 access request draft form
 request status state
 own persisted audit timeline
+approved/rejected final-state visibility with decision notes
 
 roadmap later:
 withdraw action
@@ -262,14 +263,16 @@ Reviewer surfaces:
 
 ```text
 implemented now:
-submitted request inbox
+submitted/under-review/approved/rejected request inbox
 request detail view
-audit timeline
-
-roadmap later:
 start review action
 approve action
 reject action with required reason
+decision note rendering
+audit timeline
+
+roadmap later:
+decision idempotency if retry UX is added
 ```
 
 Admin surfaces:
@@ -303,6 +306,7 @@ API tests:
 implemented now:
 unauthenticated command returns Unauthorized
 requester can create and submit own draft
+requester can see approved/rejected final states and decision notes
 same idempotency key and payload returns original result
 same idempotency key and different payload returns IdempotencyConflict
 submit transition writes status update and audit event transactionally

@@ -247,7 +247,6 @@ type RequestPanelProps = {
   draftId: string | null;
   error: AppError | null;
   isDraft: boolean;
-  isSubmitted: boolean;
   onRetryRefresh: () => void;
   onSaveDraft: () => void;
   onSubmitRequest: () => void;
@@ -264,7 +263,6 @@ export function RequestPanel({
   draftId,
   error,
   isDraft,
-  isSubmitted,
   onRetryRefresh,
   onSaveDraft,
   onSubmitRequest,
@@ -447,9 +445,7 @@ export function RequestPanel({
             />
           </label>
 
-          {isSubmitted ? (
-            <p className="submitted-note">Submitted at {access.request.submittedAt}</p>
-          ) : null}
+          <RequestLifecycleNote access={access} />
 
           <div className="button-row">
             <button
@@ -470,6 +466,45 @@ export function RequestPanel({
         </form>
       )}
     </section>
+  );
+}
+
+type RequestLifecycleNoteProps = {
+  access: NonNullable<StudyAccess>;
+};
+
+function RequestLifecycleNote({ access }: RequestLifecycleNoteProps) {
+  const decisionCopy =
+    access.request.status === "approved"
+      ? "Approved"
+      : access.request.status === "rejected"
+        ? "Rejected"
+        : null;
+  const hasLifecycleCopy =
+    access.request.submittedAt ||
+    (decisionCopy && access.request.decidedAt) ||
+    access.request.decisionNote;
+
+  if (!hasLifecycleCopy) {
+    return null;
+  }
+
+  return (
+    <div className="submitted-note" aria-label="Request workflow status">
+      {access.request.submittedAt ? (
+        <p>Submitted at {access.request.submittedAt}</p>
+      ) : null}
+      {decisionCopy && access.request.decidedAt ? (
+        <p>
+          {decisionCopy} at {access.request.decidedAt}
+        </p>
+      ) : null}
+      {access.request.decisionNote ? (
+        <p>
+          <strong>Decision note:</strong> {access.request.decisionNote}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

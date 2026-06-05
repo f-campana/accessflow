@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
-  activeStudyAccessRequestStatuses,
   parsePersistedRequestedStudyRole,
+  requesterVisibleStudyAccessRequestStatuses,
   type RequestedStudyRole,
   type StudyAccessRequestStatus,
   type WorkflowEventType
@@ -161,9 +161,13 @@ export const getRequesterStudyAccess = async (
       and(
         eq(studyAccessRequests.requesterId, actor.id),
         eq(studyAccessRequests.studyId, studyId),
-        inArray(studyAccessRequests.status, activeStudyAccessRequestStatuses)
+        inArray(
+          studyAccessRequests.status,
+          requesterVisibleStudyAccessRequestStatuses
+        )
       )
     )
+    .orderBy(desc(studyAccessRequests.updatedAt), desc(studyAccessRequests.id))
     .limit(1);
 
   if (!request) {
