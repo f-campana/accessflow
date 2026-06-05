@@ -658,11 +658,34 @@ Plain summary: starting review can now be retried safely with the same key. A re
 
 Lesson: once one workflow command has idempotent retry behavior, the next similar mutation should either match it or have a documented reason not to.
 
+### 32. [x] Add Requester Withdrawal And Reopen
+
+Issue: requesters could submit a request and see reviewer decisions, but they had no truthful way to stop a submitted request or correct a rejected one. The only future path was implied by docs, not implemented behavior.
+
+Why it matters: operational workflows need remediation paths. Without explicit withdrawal and reopen events, the UI either traps a requester in a final state or tempts future code to fake local editability after rejection.
+
+Fix direction: add `withdrawRequest` for submitted/under-review requests and `reopenRequest` for rejected requests. Both commands should use requester ownership checks, workflow transition validation, idempotency replay/conflict behavior, transactional state/audit writes, requester/reviewer projections, and simple UI controls.
+
+Done when:
+
+- requester can withdraw submitted and under-review requests
+- requester can reopen a rejected request to draft and edit it again
+- both commands replay same-key/same-payload retries and reject same-key/different-payload retries
+- audit constraints allow only legal withdrawal/reopen triples
+- requester and reviewer UI states render withdrawn/reopened truth from persisted API state
+- docs and e2e coverage describe the lifecycle semantics
+
+Completed 2026-06-05: added `withdrawRequest` and `reopenRequest` to the workflow event table, API validation, command services, tRPC router, database audit constraint, requester/reviewer projections, requester UI controls, and mobile-width e2e flow. Withdrawal moves submitted or under-review requests to `withdrawn`. Reopen moves a rejected request back to `draft`, clears submission/decision metadata on the request row, preserves the draft payload for editing, and keeps the audit timeline on the same request. Verification passed: `pnpm --filter @accessflow/workflow test`, `pnpm --filter @accessflow/api test`, `pnpm --filter @accessflow/web test`, `pnpm lint`, `pnpm typecheck`, `pnpm --filter @accessflow/api db:migrate`, `pnpm test`, `pnpm test:e2e`, and rendered mobile browser smoke at `390px` for submit -> withdraw and reject -> reopen with no console warnings/errors or horizontal overflow.
+
+Plain summary: requesters can now stop a request before a decision or reopen a rejected request for edits. Both actions are real persisted workflow events, not local UI shortcuts.
+
+Lesson: correction paths should be first-class workflow states. If the user is allowed to fix or stop something, the audit timeline should say exactly when that happened.
+
 ## Do Not Start Yet
 
-Requester hardening is substantially complete, and the first reviewer decision slice has been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:
+Requester hardening is substantially complete, and the first reviewer decision/remediation slices have been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:
 
-- withdrawal/revocation workflow UI
+- revocation workflow UI
 - admin workflow UI or mutations
 - organizations or tenants
 - uploads/documents

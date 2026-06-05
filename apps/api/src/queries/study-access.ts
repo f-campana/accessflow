@@ -29,14 +29,15 @@ export type StudySummary = {
 
 type ReviewerVisibleStatus = Extract<
   StudyAccessRequestStatus,
-  "submitted" | "under_review" | "approved" | "rejected"
+  "submitted" | "under_review" | "approved" | "rejected" | "withdrawn"
 >;
 
 const reviewerVisibleStatuses = [
   "submitted",
   "under_review",
   "approved",
-  "rejected"
+  "rejected",
+  "withdrawn"
 ] as const satisfies readonly ReviewerVisibleStatus[];
 
 export type RequesterStudyAccess = {
@@ -254,7 +255,8 @@ const parseReviewerVisibleStatus = (
     value === "submitted" ||
     value === "under_review" ||
     value === "approved" ||
-    value === "rejected"
+    value === "rejected" ||
+    value === "withdrawn"
   ) {
     return value;
   }

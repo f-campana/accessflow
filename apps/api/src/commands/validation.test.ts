@@ -4,7 +4,9 @@ import { requestedStudyRoles } from "@accessflow/workflow";
 
 import {
   draftFieldsSchema,
-  finalDraftFieldsSchema
+  finalDraftFieldsSchema,
+  reopenRequestInputSchema,
+  withdrawRequestInputSchema
 } from "./validation";
 
 describe("command validation requested roles", () => {
@@ -51,5 +53,26 @@ describe("command validation requested roles", () => {
         "Requested role is required"
       ]);
     }
+  });
+});
+
+describe("requester lifecycle validation", () => {
+  it("requires request id and idempotency key for lifecycle commands", () => {
+    const input = {
+      requestId: crypto.randomUUID(),
+      idempotencyKey: "requester-lifecycle-key"
+    };
+
+    expect(withdrawRequestInputSchema.safeParse(input).success).toBe(true);
+    expect(reopenRequestInputSchema.safeParse(input).success).toBe(true);
+    expect(
+      withdrawRequestInputSchema.safeParse({ requestId: input.requestId })
+        .success
+    ).toBe(false);
+    expect(
+      reopenRequestInputSchema.safeParse({
+        idempotencyKey: input.idempotencyKey
+      }).success
+    ).toBe(false);
   });
 });

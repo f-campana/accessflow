@@ -134,3 +134,9 @@ Reviewer start-review idempotency completed on 2026-06-05: `startReview` now req
 Plain summary: starting review now has the same retry safety as submit, approve, and reject. If the first response is lost, retrying with the same key can recover the original `under_review` result.
 
 Lesson: intermediate workflow transitions deserve retry semantics too when they mutate state and write audit events. They may be less business-final than approve/reject, but the same truthfulness rule applies.
+
+Requester withdrawal and correction completed on 2026-06-05: requesters can now withdraw submitted or under-review requests and can reopen rejected requests back to draft for edits. Both commands require idempotency keys, persist the status change and audit event in one transaction, replay completed same-key/same-payload retries, and reject same-key/different-payload retries. Requester reads keep withdrawn history visible, reviewer reads tolerate withdrawn final state, and the mobile-width e2e path covers withdrawal plus rejected-request reopening.
+
+Plain summary: requesters now have a truthful way to stop a request before decision or fix a rejected request without pretending the old workflow disappeared.
+
+Lesson: remediation paths should be modeled as explicit workflow events. A rejected request becoming editable again is not just a UI unlock; it is a durable state transition with audit meaning.

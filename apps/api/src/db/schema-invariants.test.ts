@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "./client";
 import {
+  studyAccessAuditEvents,
   studyAccessRequestDrafts,
   studyAccessRequests
 } from "./schema";
@@ -161,6 +162,46 @@ describe("database workflow invariants", () => {
         ownerId: otherActor.id
       }),
       "study_access_request_drafts_request_owner_fk"
+    );
+  });
+
+  it("accepts legal withdrawal audit triples and rejects impossible reopen triples", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const [request] = await db
+      .insert(studyAccessRequests)
+      .values({
+        requesterId: actor.id,
+        studyId: study.id,
+        status: "withdrawn",
+        requestedRole: "viewer",
+        submittedAt: new Date()
+      })
+      .returning({ id: studyAccessRequests.id });
+
+    if (!request) {
+      throw new Error("Expected request fixture");
+    }
+
+    await expect(
+      db.insert(studyAccessAuditEvents).values({
+        requestId: request.id,
+        actorId: actor.id,
+        eventType: "withdrawRequest",
+        fromStatus: "submitted",
+        toStatus: "withdrawn"
+      })
+    ).resolves.toBeDefined();
+
+    await expectConstraintViolation(
+      db.insert(studyAccessAuditEvents).values({
+        requestId: request.id,
+        actorId: actor.id,
+        eventType: "reopenRequest",
+        fromStatus: "submitted",
+        toStatus: "draft"
+      }),
+      "study_access_audit_events_transition_check"
     );
   });
 });

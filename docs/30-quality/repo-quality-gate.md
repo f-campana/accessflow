@@ -90,8 +90,10 @@ For the requester path, verify:
 9. sign-out/sign-in and refresh do not lie about workflow state
 10. approved/rejected final states remain visible after reviewer decisions
 11. rejection notes and decision audit events are visible to the requester
-12. no browser console errors or warnings
-13. no horizontal overflow at phone width
+12. submitted or under-review requests can be withdrawn with a persisted audit event
+13. rejected requests can be reopened to an editable draft with a persisted audit event
+14. no browser console errors or warnings
+15. no horizontal overflow at phone width
 
 For the reviewer path, verify:
 
@@ -102,9 +104,9 @@ For the reviewer path, verify:
 5. approve/reject controls only appear for `under_review` requests
 6. `approveRequest` moves the request to `approved`
 7. `rejectRequest` requires a reason and moves the request to `rejected`
-8. final approved/rejected states hide decision controls
+8. final approved/rejected/withdrawn states hide decision controls
 9. retryable start/approve/reject actions preserve one workflow audit event per idempotency key
-10. audit timeline shows persisted `submitRequest`, `startReview`, and decision events
+10. audit timeline shows persisted `submitRequest`, `startReview`, decision, and withdrawal events when present
 11. no browser console errors or warnings
 12. no horizontal overflow at phone width
 
@@ -120,7 +122,7 @@ First-time local setup may need:
 pnpm exec playwright install chromium
 ```
 
-The e2e gate starts the local Postgres/API/web stack through Playwright, runs mobile-width Chromium workflows, checks the requester happy path and empty-submit validation path, reloads to prove persisted requester state, verifies requester and reviewer audit timelines, exercises reviewer start/reject/approve paths, verifies requester final-state visibility after reviewer rejection, captures page errors/console warnings, and asserts no horizontal overflow.
+The e2e gate starts the local Postgres/API/web stack through Playwright, runs mobile-width Chromium workflows, checks the requester happy path and empty-submit validation path, reloads to prove persisted requester state, verifies requester and reviewer audit timelines, exercises requester withdrawal and rejected-request reopen, exercises reviewer start/reject/approve paths, verifies requester final-state visibility after reviewer rejection, captures page errors/console warnings, and asserts no horizontal overflow.
 
 The e2e startup resets the local preview database before seeding, so it should begin with one study, three demo users, and no existing access requests.
 

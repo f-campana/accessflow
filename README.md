@@ -20,12 +20,14 @@ Implemented API coverage:
 - Better Auth local email/password session path.
 - Drizzle/Postgres schema and migrations inside `apps/api`.
 - `createDraft`, `saveDraft`, `submitRequest`, `startReview`,
-  `approveRequest`, and `rejectRequest` command services.
+  `approveRequest`, `rejectRequest`, `withdrawRequest`, and `reopenRequest`
+  command services.
 - tRPC mutations for those commands.
 - tRPC reads for the current actor, study list, and requester study access state.
-- tRPC reviewer reads for submitted, under-review, approved, and rejected
+- tRPC reviewer reads for submitted, under-review, approved, rejected, and withdrawn
   request inbox/detail projections.
-- Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
+- Requester ownership checks, typed command errors, idempotency replay, and audit
+  writes for submit, withdraw, and reopen transitions.
 - Reviewer/admin authorization for reviewer reads and review decisions.
 - Reviewer transition idempotency replay/conflict behavior for start, approve, and reject retries.
 
@@ -33,25 +35,26 @@ Implemented web coverage:
 
 - Real local sign-up/sign-in through the API auth path.
 - Study entry point backed by seeded Postgres data.
-- Draft creation, draft saving, submission, typed error rendering, persisted status, and audit timeline.
+- Draft creation, draft saving, submission, withdrawal, reopen-for-edits, typed
+  error rendering, persisted status, and audit timeline.
 - Requester visibility for approved/rejected final states after reviewer decisions,
   including decision notes and full persisted audit history.
-- Reviewer queue/detail view for submitted, under-review, approved, and rejected
+- Reviewer queue/detail view for submitted, under-review, approved, rejected, and withdrawn
   requests, including start-review, approve, reject, decision note, and
   persisted audit timeline.
 
 Current focus:
 
 - Keep requester and reviewer workflow surfaces honest while broadening coverage.
-- Do not add withdrawal, revocation, admin consoles, uploads, notifications, or
-  tenant/org modeling before the current workflow is reviewed.
+- Do not add revocation, admin consoles, uploads, notifications, or tenant/org
+  modeling before the current workflow is reviewed.
 
 Current implementation covers requester submission and reviewer decisions:
 
 ```text
-implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, reviewer transition idempotency, requester final-state reads, persisted audit timelines
-next: review whether withdrawal/revocation belongs before admin inspection
-later roadmap: withdrawal/revocation, admin inspection, broader operational surfaces
+implemented: sign up/sign in, study read, draft create/save, submit, withdraw, reopen rejected requests, reviewer start/approve/reject, retry idempotency, requester final-state reads, persisted audit timelines
+next: decide whether admin inspection or revocation is the next smallest useful surface
+later roadmap: revocation, admin inspection, broader operational surfaces
 ```
 
 ## Read First

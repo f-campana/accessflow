@@ -76,6 +76,11 @@ describe("study access workflow transitions", () => {
         eventType: "startReview",
         from: "submitted",
         to: "under_review"
+      },
+      {
+        eventType: "withdrawRequest",
+        from: "submitted",
+        to: "withdrawn"
       }
     ]);
     expect(allowedWorkflowTransitionsFrom("under_review")).toEqual([
@@ -88,6 +93,18 @@ describe("study access workflow transitions", () => {
         eventType: "rejectRequest",
         from: "under_review",
         to: "rejected"
+      },
+      {
+        eventType: "withdrawRequest",
+        from: "under_review",
+        to: "withdrawn"
+      }
+    ]);
+    expect(allowedWorkflowTransitionsFrom("rejected")).toEqual([
+      {
+        eventType: "reopenRequest",
+        from: "rejected",
+        to: "draft"
       }
     ]);
   });
@@ -100,7 +117,9 @@ describe("study access workflow transitions", () => {
       "submitRequest",
       "startReview",
       "approveRequest",
-      "rejectRequest"
+      "rejectRequest",
+      "withdrawRequest",
+      "reopenRequest"
     ]);
     for (const transition of workflowTransitions) {
       expect(events.has(transition.eventType)).toBe(true);
@@ -125,7 +144,9 @@ describe("study access workflow transitions", () => {
     }
 
     expect(requesterVisibleStudyAccessRequestStatuses).toContain("rejected");
+    expect(requesterVisibleStudyAccessRequestStatuses).toContain("withdrawn");
     expect(activeStudyAccessRequestStatuses).not.toContain("rejected");
+    expect(activeStudyAccessRequestStatuses).not.toContain("withdrawn");
   });
 
   it("has only one transition target for each status and event pair", () => {

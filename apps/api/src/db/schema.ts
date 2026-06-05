@@ -313,6 +313,24 @@ export const studyAccessAuditEvents = pgTable(
           and ${table.fromStatus} = 'under_review'
           and ${table.toStatus} = 'rejected'
         )
+        or
+        (
+          (${table.eventType})::text = 'withdrawRequest'
+          and ${table.fromStatus} = 'submitted'
+          and ${table.toStatus} = 'withdrawn'
+        )
+        or
+        (
+          (${table.eventType})::text = 'withdrawRequest'
+          and ${table.fromStatus} = 'under_review'
+          and ${table.toStatus} = 'withdrawn'
+        )
+        or
+        (
+          (${table.eventType})::text = 'reopenRequest'
+          and ${table.fromStatus} = 'rejected'
+          and ${table.toStatus} = 'draft'
+        )
       `
     )
   })

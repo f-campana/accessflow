@@ -38,7 +38,7 @@ const submittedAccess = {
   auditEvents: []
 } as unknown as StudyAccess;
 
-const finalAccess = (status: "approved" | "rejected") =>
+const finalAccess = (status: "approved" | "rejected" | "withdrawn") =>
   ({
     request: {
       id: "request-1",
@@ -106,10 +106,12 @@ describe("requester workspace controller state", () => {
 
     expect(state.isDraft).toBe(false);
     expect(state.isSubmitted).toBe(true);
+    expect(state.canWithdraw).toBe(true);
+    expect(state.canReopenRejected).toBe(false);
     expect(state.draftFieldsEditable).toBe(false);
   });
 
-  it.each(["approved", "rejected"] as const)(
+  it.each(["approved", "rejected", "withdrawn"] as const)(
     "keeps %s requests visible but read-only",
     (status) => {
       const state = deriveRequesterWorkspaceControllerState({
@@ -123,6 +125,30 @@ describe("requester workspace controller state", () => {
       expect(state.isDraft).toBe(false);
       expect(state.isSubmitted).toBe(false);
       expect(state.draftFieldsEditable).toBe(false);
+      expect(state.canWithdraw).toBe(false);
+      expect(state.canReopenRejected).toBe(status === "rejected");
     }
   );
+
+  it("allows withdrawal while a request is under review", () => {
+    const state = deriveRequesterWorkspaceControllerState({
+      access: {
+        request: {
+          id: "request-1",
+          status: "under_review"
+        },
+        draft: {
+          id: "draft-1"
+        },
+        auditEvents: []
+      } as unknown as StudyAccess,
+      canRetryRefresh: false,
+      operation: "idle",
+      selectedStudyId: "study-1",
+      studies
+    });
+
+    expect(state.canWithdraw).toBe(true);
+    expect(state.canReopenRejected).toBe(false);
+  });
 });

@@ -240,6 +240,18 @@ test("requester can submit a durable study access request", async ({ page }) => 
   await expect(page.getByLabel("Purpose")).toBeDisabled();
   await expectNoHorizontalOverflow(page);
 
+  await page.getByRole("button", { name: "Withdraw request" }).click();
+
+  await expect(page.getByText(/Request .+ withdrawn\./)).toBeVisible();
+  await expect(page.getByText("withdrawn", { exact: true })).toBeVisible();
+  await expect(page.getByText("withdrawRequest")).toBeVisible();
+  await expect(page.getByText("submitted to withdrawn")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw request" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create new request draft" })
+  ).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
   expect(consoleMessages).toEqual([]);
 });
 
@@ -329,6 +341,18 @@ test("requester sees rejected final state after reviewer decision", async ({
   await expect(page.getByLabel("Purpose")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Submit request" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Reopen for edits" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Reopen for edits" }).click();
+
+  await expect(page.getByText(/Request .+ reopened for edits\./)).toBeVisible();
+  await expect(page.getByText("draft", { exact: true })).toBeVisible();
+  await expect(page.getByText("reopenRequest")).toBeVisible();
+  await expect(page.getByText("rejected to draft")).toBeVisible();
+  await expect(page.getByLabel("Purpose")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Submit request" })).toBeEnabled();
   await expectNoHorizontalOverflow(page);
 
   expect(consoleMessages).toEqual([]);

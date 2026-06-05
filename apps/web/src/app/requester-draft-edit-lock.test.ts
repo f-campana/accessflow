@@ -14,11 +14,15 @@ describe("requester draft edit lock", () => {
 
   it("does not lock draft fields for unrelated loading states", () => {
     expect(isDraftCommandInFlight("loadingWorkspace")).toBe(false);
+    expect(isDraftCommandInFlight("withdrawingRequest")).toBe(false);
     expect(isDraftCommandInFlight("idle")).toBe(false);
   });
 
   it("derives status copy separately from edit-lock behavior", () => {
     expect(requesterOperationStatus("savingDraft")).toBe("Saving draft");
+    expect(requesterOperationStatus("withdrawingRequest")).toBe(
+      "Withdrawing request"
+    );
     expect(isDraftCommandInFlight("savingDraft")).toBe(true);
   });
 

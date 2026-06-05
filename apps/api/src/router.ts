@@ -3,9 +3,11 @@ import {
   approveRequest,
   createDraft,
   rejectRequest,
+  reopenRequest,
   saveDraft,
   startReview,
-  submitRequest
+  submitRequest,
+  withdrawRequest
 } from "./commands/study-access";
 import {
   getReviewerStudyAccessDetail,
@@ -47,6 +49,12 @@ export const appRouter = router({
   ),
   submitRequest: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
     toCommandResponse(await submitRequest(ctx.actor, input))
+  ),
+  withdrawRequest: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
+    toCommandResponse(await withdrawRequest(ctx.actor, input))
+  ),
+  reopenRequest: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
+    toCommandResponse(await reopenRequest(ctx.actor, input))
   ),
   startReview: reviewerProcedure
     .input(z.unknown())

@@ -81,6 +81,16 @@ export const rejectRequestInputSchema = z.object({
     .max(1_000, "Rejection reason must be 1000 characters or less")
 });
 
+export const withdrawRequestInputSchema = z.object({
+  requestId: z.uuid(),
+  idempotencyKey: z.string().trim().min(8).max(128)
+});
+
+export const reopenRequestInputSchema = z.object({
+  requestId: z.uuid(),
+  idempotencyKey: z.string().trim().min(8).max(128)
+});
+
 export const finalDraftFieldsSchema = z.object({
   purpose: requiredSubmissionText("Purpose", 1_000),
   requestedRole: requestedStudyRoleInputSchema,
@@ -96,6 +106,8 @@ export type SubmitRequestInput = z.infer<typeof submitRequestInputSchema>;
 export type StartReviewInput = z.infer<typeof startReviewInputSchema>;
 export type ApproveRequestInput = z.infer<typeof approveRequestInputSchema>;
 export type RejectRequestInput = z.infer<typeof rejectRequestInputSchema>;
+export type WithdrawRequestInput = z.infer<typeof withdrawRequestInputSchema>;
+export type ReopenRequestInput = z.infer<typeof reopenRequestInputSchema>;
 export type FinalDraftFields = z.infer<typeof finalDraftFieldsSchema>;
 export type DraftFieldName = keyof DraftFields;
 export type CreateDraftInputFieldName = keyof CreateDraftInput;
@@ -104,3 +116,5 @@ export type SubmitRequestInputFieldName = keyof SubmitRequestInput;
 export type StartReviewInputFieldName = keyof StartReviewInput;
 export type ApproveRequestInputFieldName = keyof ApproveRequestInput;
 export type RejectRequestInputFieldName = keyof RejectRequestInput;
+export type WithdrawRequestInputFieldName = keyof WithdrawRequestInput;
+export type ReopenRequestInputFieldName = keyof ReopenRequestInput;

@@ -8,7 +8,9 @@ export type RequesterOperation =
   | "refreshingWorkspace"
   | "creatingDraft"
   | "savingDraft"
-  | "submittingRequest";
+  | "submittingRequest"
+  | "withdrawingRequest"
+  | "reopeningRequest";
 
 const requesterOperationLabels = {
   creatingAccount: "Creating account",
@@ -16,10 +18,12 @@ const requesterOperationLabels = {
   loadingRequest: "Loading request",
   loadingWorkspace: "Loading workspace",
   refreshingWorkspace: "Refreshing workspace",
+  reopeningRequest: "Reopening request",
   savingDraft: "Saving draft",
   signingIn: "Signing in",
   signingOut: "Signing out",
-  submittingRequest: "Submitting request"
+  submittingRequest: "Submitting request",
+  withdrawingRequest: "Withdrawing request"
 } satisfies Record<Exclude<RequesterOperation, "idle">, string>;
 
 export const isRequesterOperationActive = (operation: RequesterOperation) =>

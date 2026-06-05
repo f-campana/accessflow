@@ -1,6 +1,11 @@
 import { unexpected, type NonValidationAppError } from "@accessflow/core";
 
-type CommandAction = "createDraft" | "saveDraft" | "submitRequest";
+type CommandAction =
+  | "createDraft"
+  | "saveDraft"
+  | "submitRequest"
+  | "withdrawRequest"
+  | "reopenRequest";
 
 export const commandFailureMessages = {
   createDraft:
@@ -8,7 +13,11 @@ export const commandFailureMessages = {
   saveDraft:
     "Draft could not be saved. No workflow change was confirmed. Try again.",
   submitRequest:
-    "Request could not be submitted. No workflow change was confirmed. Try again."
+    "Request could not be submitted. No workflow change was confirmed. Try again.",
+  withdrawRequest:
+    "Request could not be withdrawn. No workflow change was confirmed. Try again.",
+  reopenRequest:
+    "Request could not be reopened. No workflow change was confirmed. Try again."
 } satisfies Record<CommandAction, string>;
 
 export const reloadFailureMessages = {
@@ -17,7 +26,11 @@ export const reloadFailureMessages = {
   saveDraft:
     "Draft was saved, but the workspace could not refresh. Retry refresh before continuing.",
   submitRequest:
-    "Request was submitted, but the workspace could not refresh. Retry refresh before continuing."
+    "Request was submitted, but the workspace could not refresh. Retry refresh before continuing.",
+  withdrawRequest:
+    "Request was withdrawn, but the workspace could not refresh. Retry refresh before continuing.",
+  reopenRequest:
+    "Request was reopened, but the workspace could not refresh. Retry refresh before continuing."
 } satisfies Record<CommandAction, string>;
 
 export const commandExceptionError = (

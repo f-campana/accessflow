@@ -73,10 +73,16 @@ export function RequesterWorkspace() {
             draftForm={controller.draftForm}
             draftId={controller.draftId}
             error={controller.error}
+            canReopenRejected={controller.canReopenRejected}
+            canWithdraw={controller.canWithdraw}
             isDraft={controller.isDraft}
+            onReopenRejectedRequest={() =>
+              void actions.reopenRejectedRequest()
+            }
             onRetryRefresh={() => void actions.retrySelectedStudyRefresh()}
             onSaveDraft={() => void actions.saveDraft()}
             onSubmitRequest={() => void actions.submitRequest()}
+            onWithdrawRequest={() => void actions.withdrawRequest()}
             onUpdateDraft={actions.updateDraft}
           />
           <AuditTimelinePanel access={controller.access} />

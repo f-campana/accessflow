@@ -19,6 +19,12 @@ describe("requester command errors", () => {
     expect(commandExceptionError("submitRequest").message).toContain(
       "Request could not be submitted"
     );
+    expect(commandExceptionError("withdrawRequest").message).toContain(
+      "Request could not be withdrawn"
+    );
+    expect(commandExceptionError("reopenRequest").message).toContain(
+      "Request could not be reopened"
+    );
   });
 
   it("distinguishes committed commands from reload failures", () => {
@@ -29,6 +35,12 @@ describe("requester command errors", () => {
     });
     expect(commandReloadError("submitRequest").message).toContain(
       "Request was submitted"
+    );
+    expect(commandReloadError("withdrawRequest").message).toContain(
+      "Request was withdrawn"
+    );
+    expect(commandReloadError("reopenRequest").message).toContain(
+      "Request was reopened"
     );
   });
 

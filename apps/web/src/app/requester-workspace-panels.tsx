@@ -223,14 +223,16 @@ export function StudyPanel({
         </p>
       )}
 
-      {!access && selectedStudy ? (
+      {(!access || access.request.status === "withdrawn") && selectedStudy ? (
         <button
           type="button"
           className="primary-button"
           onClick={onCreateDraft}
           disabled={busy || canRetryRefresh}
         >
-          Create request draft
+          {access?.request.status === "withdrawn"
+            ? "Create new request draft"
+            : "Create request draft"}
         </button>
       ) : null}
     </section>
@@ -246,10 +248,14 @@ type RequestPanelProps = {
   draftForm: DraftForm;
   draftId: string | null;
   error: AppError | null;
+  canReopenRejected: boolean;
+  canWithdraw: boolean;
   isDraft: boolean;
+  onReopenRejectedRequest: () => void;
   onRetryRefresh: () => void;
   onSaveDraft: () => void;
   onSubmitRequest: () => void;
+  onWithdrawRequest: () => void;
   onUpdateDraft: (field: keyof DraftForm, value: string) => void;
 };
 
@@ -262,10 +268,14 @@ export function RequestPanel({
   draftForm,
   draftId,
   error,
+  canReopenRejected,
+  canWithdraw,
   isDraft,
+  onReopenRejectedRequest,
   onRetryRefresh,
   onSaveDraft,
   onSubmitRequest,
+  onWithdrawRequest,
   onUpdateDraft
 }: RequestPanelProps) {
   const validationError = error?.code === "ValidationError" ? error : null;
@@ -462,6 +472,26 @@ export function RequestPanel({
             >
               Submit request
             </button>
+            {canWithdraw ? (
+              <button
+                type="button"
+                className="danger-button"
+                onClick={onWithdrawRequest}
+                disabled={busy || canRetryRefresh}
+              >
+                Withdraw request
+              </button>
+            ) : null}
+            {canReopenRejected ? (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onReopenRejectedRequest}
+                disabled={busy || canRetryRefresh}
+              >
+                Reopen for edits
+              </button>
+            ) : null}
           </div>
         </form>
       )}
@@ -479,10 +509,13 @@ function RequestLifecycleNote({ access }: RequestLifecycleNoteProps) {
       ? "Approved"
       : access.request.status === "rejected"
         ? "Rejected"
+        : access.request.status === "withdrawn"
+          ? "Withdrawn"
         : null;
   const hasLifecycleCopy =
     access.request.submittedAt ||
     (decisionCopy && access.request.decidedAt) ||
+    access.request.status === "withdrawn" ||
     access.request.decisionNote;
 
   if (!hasLifecycleCopy) {
@@ -498,6 +531,9 @@ function RequestLifecycleNote({ access }: RequestLifecycleNoteProps) {
         <p>
           {decisionCopy} at {access.request.decidedAt}
         </p>
+      ) : null}
+      {access.request.status === "withdrawn" ? (
+        <p>Withdrawn at {access.request.updatedAt}</p>
       ) : null}
       {access.request.decisionNote ? (
         <p>

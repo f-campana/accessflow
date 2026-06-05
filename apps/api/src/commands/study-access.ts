@@ -5,6 +5,12 @@ export {
   type ApproveRequestResult,
   type RejectRequestResult
 } from "./study-access/review-decision";
+export {
+  reopenRequest,
+  withdrawRequest,
+  type ReopenRequestResult,
+  type WithdrawRequestResult
+} from "./study-access/requester-lifecycle";
 export { saveDraft, type SaveDraftResult } from "./study-access/save-draft";
 export { startReview, type StartReviewResult } from "./study-access/start-review";
 export { submitRequest } from "./study-access/submit-request";

@@ -25,7 +25,8 @@ export const requesterVisibleStudyAccessRequestStatuses = [
   "submitted",
   "under_review",
   "approved",
-  "rejected"
+  "rejected",
+  "withdrawn"
 ] as const satisfies readonly StudyAccessRequestStatus[];
 
 export const requestedStudyRoles = ["viewer", "analyst"] as const;
@@ -64,7 +65,9 @@ export const workflowEventTypes = [
   "submitRequest",
   "startReview",
   "approveRequest",
-  "rejectRequest"
+  "rejectRequest",
+  "withdrawRequest",
+  "reopenRequest"
 ] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];
@@ -99,6 +102,21 @@ export const workflowTransitions = [
     eventType: "rejectRequest",
     from: "under_review",
     to: "rejected"
+  },
+  {
+    eventType: "withdrawRequest",
+    from: "submitted",
+    to: "withdrawn"
+  },
+  {
+    eventType: "withdrawRequest",
+    from: "under_review",
+    to: "withdrawn"
+  },
+  {
+    eventType: "reopenRequest",
+    from: "rejected",
+    to: "draft"
   }
 ] as const satisfies readonly WorkflowTransition[];
 

@@ -468,6 +468,134 @@ describe("tRPC auth boundary", () => {
     );
   });
 
+  it("lets requester users withdraw submitted requests and keep final history visible", async () => {
+    const submitted = await createSubmittedRequestForRouter(
+      "requester-router-withdraw-1"
+    );
+    const requesterCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: submitted.requester
+    });
+    const withdrawIdempotencyKey = commandKey("router-withdraw");
+
+    const withdrawn = await requesterCaller.withdrawRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: withdrawIdempotencyKey
+    });
+    const replayedWithdrawal = await requesterCaller.withdrawRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: withdrawIdempotencyKey
+    });
+
+    expect(withdrawn.ok).toBe(true);
+    expect(replayedWithdrawal).toEqual(withdrawn);
+
+    await expect(
+      requesterCaller.myStudyAccess({ studyId: submitted.study.id })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "withdrawn"
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({
+            eventType: "withdrawRequest",
+            fromStatus: "submitted",
+            toStatus: "withdrawn"
+          })
+        ]
+      })
+    );
+
+    const reviewer = await createTestActor("reviewer");
+    const reviewerCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: reviewer
+    });
+
+    await expect(
+      reviewerCaller.reviewerStudyAccessDetail({
+        requestId: submitted.requestId
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "withdrawn"
+        })
+      })
+    );
+  });
+
+  it("lets requester users reopen rejected requests to draft", async () => {
+    const reviewer = await createTestActor("reviewer");
+    const submitted = await createSubmittedRequestForRouter(
+      "requester-router-reopen-1"
+    );
+    const reviewerCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: reviewer
+    });
+    const requesterCaller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: submitted.requester
+    });
+    const reason = "Requester should narrow the access purpose.";
+
+    const started = await reviewerCaller.startReview({
+      requestId: submitted.requestId,
+      idempotencyKey: commandKey("router-reopen-start")
+    });
+    const rejected = await reviewerCaller.rejectRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: commandKey("router-reopen-reject"),
+      reason
+    });
+    const reopenIdempotencyKey = commandKey("router-reopen");
+    const reopened = await requesterCaller.reopenRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: reopenIdempotencyKey
+    });
+    const replayedReopen = await requesterCaller.reopenRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: reopenIdempotencyKey
+    });
+
+    expect(started.ok).toBe(true);
+    expect(rejected.ok).toBe(true);
+    expect(reopened.ok).toBe(true);
+    expect(replayedReopen).toEqual(reopened);
+
+    await expect(
+      requesterCaller.myStudyAccess({ studyId: submitted.study.id })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "draft",
+          submittedAt: null,
+          decidedAt: null,
+          decisionNote: null
+        }),
+        draft: expect.objectContaining({
+          requestedRole: validSubmission.requestedRole
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({ eventType: "startReview" }),
+          expect.objectContaining({ eventType: "rejectRequest" }),
+          expect.objectContaining({
+            eventType: "reopenRequest",
+            fromStatus: "rejected",
+            toStatus: "draft"
+          })
+        ]
+      })
+    );
+  });
+
   it("forbids requester users from starting review through tRPC", async () => {
     const requester = await createTestActor("requester");
     const study = await createTestStudy();
@@ -614,6 +742,28 @@ describe("tRPC auth boundary", () => {
       caller.submitRequest({
         draftId: crypto.randomUUID(),
         idempotencyKey: "unauthenticated-submit"
+      })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("requires auth for requester lifecycle commands", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(
+      caller.withdrawRequest({
+        requestId: crypto.randomUUID(),
+        idempotencyKey: commandKey("unauthenticated-withdraw")
+      })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+
+    await expect(
+      caller.reopenRequest({
+        requestId: crypto.randomUUID(),
+        idempotencyKey: commandKey("unauthenticated-reopen")
       })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED"

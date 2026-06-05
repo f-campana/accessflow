@@ -312,10 +312,15 @@ export function ReviewerDetailPanel({
               </p>
             ) : null}
 
+            {detail.request.status === "withdrawn" ? (
+              <p className="empty-state">Request withdrawn by requester.</p>
+            ) : null}
+
             {detail.request.status !== "submitted" &&
             detail.request.status !== "under_review" &&
             detail.request.status !== "approved" &&
-            detail.request.status !== "rejected" ? (
+            detail.request.status !== "rejected" &&
+            detail.request.status !== "withdrawn" ? (
               <p className="empty-state">No reviewer action is available.</p>
             ) : (
               null

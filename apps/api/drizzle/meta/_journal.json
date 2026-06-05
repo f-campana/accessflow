@@ -57,6 +57,13 @@
       "when": 1780666424594,
       "tag": "0007_motionless_onslaught",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780679078517,
+      "tag": "0008_nervous_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }

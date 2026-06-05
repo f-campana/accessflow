@@ -19,6 +19,11 @@ import {
   isDraftCommandInFlight
 } from "./requester-draft-edit-lock";
 import {
+  getOrCreateRequesterLifecycleAttempt,
+  reconcileRequesterLifecycleAttempt,
+  type RequesterLifecycleAttempt
+} from "./requester-lifecycle-attempt";
+import {
   isRequesterOperationActive,
   requesterOperationStatus,
   type RequesterOperation
@@ -79,6 +84,10 @@ export const deriveRequesterWorkspaceControllerState = ({
   const draftId = access?.draft?.id ?? null;
   const isDraft = access?.request.status === "draft";
   const isSubmitted = access?.request.status === "submitted";
+  const canWithdraw =
+    access?.request.status === "submitted" ||
+    access?.request.status === "under_review";
+  const canReopenRejected = access?.request.status === "rejected";
   const operationActive = isRequesterOperationActive(operation);
   const operationStatus = requesterOperationStatus(operation);
   const draftCommandInFlight = isDraftCommandInFlight(operation);
@@ -92,6 +101,8 @@ export const deriveRequesterWorkspaceControllerState = ({
     draftCommandInFlight,
     draftFieldsEditable,
     draftId,
+    canReopenRejected,
+    canWithdraw,
     isDraft,
     isSubmitted,
     operationActive,
@@ -119,6 +130,8 @@ export function useRequesterWorkspaceController({
   const [authError, setAuthError] = useState<string | null>(null);
   const [canRetryRefresh, setCanRetryRefresh] = useState(false);
   const [submitAttempt, setSubmitAttempt] = useState<SubmitAttempt | null>(null);
+  const [lifecycleAttempt, setLifecycleAttempt] =
+    useState<RequesterLifecycleAttempt | null>(null);
   const selectedStudyIdRef = useRef(selectedStudyId);
   const accessRequestGuardRef = useRef<AsyncRequestGuard | null>(null);
 
@@ -150,6 +163,9 @@ export function useRequesterWorkspaceController({
     setSubmitAttempt((currentAttempt) =>
       reconcileSubmitAttempt(currentAttempt, nextAccess)
     );
+    setLifecycleAttempt((currentAttempt) =>
+      reconcileRequesterLifecycleAttempt(currentAttempt, nextAccess)
+    );
   }, []);
 
   const isLatestStudyRequest = useCallback(
@@ -168,6 +184,7 @@ export function useRequesterWorkspaceController({
     setNotice(null);
     setCanRetryRefresh(false);
     setSubmitAttempt(null);
+    setLifecycleAttempt(null);
 
     try {
       const currentActor = await trpcClient.me.query();
@@ -241,6 +258,7 @@ export function useRequesterWorkspaceController({
     setNotice(null);
     setCanRetryRefresh(false);
     setSubmitAttempt(null);
+    setLifecycleAttempt(null);
 
     try {
       const nextAccess = await trpcClient.myStudyAccess.query({ studyId });
@@ -272,6 +290,7 @@ export function useRequesterWorkspaceController({
     setNotice(null);
     setCanRetryRefresh(false);
     setSubmitAttempt(null);
+    setLifecycleAttempt(null);
     accessRequestGuard.invalidate();
 
     try {
@@ -312,6 +331,7 @@ export function useRequesterWorkspaceController({
     setAuthError(null);
     setCanRetryRefresh(false);
     setSubmitAttempt(null);
+    setLifecycleAttempt(null);
     accessRequestGuard.invalidate();
 
     try {
@@ -557,6 +577,124 @@ export function useRequesterWorkspaceController({
     }
   };
 
+  const withdrawRequest = async () => {
+    const studyId = selectedStudyIdRef.current;
+    const requestId = access?.request.id ?? null;
+
+    if (!requestId || !studyId) {
+      return;
+    }
+
+    setOperation("withdrawingRequest");
+    setError(null);
+    setNotice(null);
+    setCanRetryRefresh(false);
+
+    const nextAttempt = getOrCreateRequesterLifecycleAttempt(
+      lifecycleAttempt,
+      {
+        commandName: "withdrawRequest",
+        requestId
+      },
+      createClientId
+    );
+    setLifecycleAttempt(nextAttempt);
+
+    try {
+      const response = await trpcClient.withdrawRequest.mutate({
+        requestId,
+        idempotencyKey: nextAttempt.idempotencyKey
+      });
+
+      if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
+        setError(response.error);
+        return;
+      }
+
+      await refreshAfterCommand(
+        studyId,
+        commandReloadError("withdrawRequest"),
+        `Request ${compactId(response.value.requestId)} withdrawn.`,
+        (nextAccess) =>
+          nextAccess?.request.id === requestId &&
+          nextAccess.request.status === "withdrawn"
+      );
+    } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
+      setError(commandExceptionError("withdrawRequest"));
+    } finally {
+      if (selectedStudyIdRef.current === studyId) {
+        setOperation("idle");
+      }
+    }
+  };
+
+  const reopenRejectedRequest = async () => {
+    const studyId = selectedStudyIdRef.current;
+    const requestId = access?.request.id ?? null;
+
+    if (!requestId || !studyId) {
+      return;
+    }
+
+    setOperation("reopeningRequest");
+    setError(null);
+    setNotice(null);
+    setCanRetryRefresh(false);
+
+    const nextAttempt = getOrCreateRequesterLifecycleAttempt(
+      lifecycleAttempt,
+      {
+        commandName: "reopenRequest",
+        requestId
+      },
+      createClientId
+    );
+    setLifecycleAttempt(nextAttempt);
+
+    try {
+      const response = await trpcClient.reopenRequest.mutate({
+        requestId,
+        idempotencyKey: nextAttempt.idempotencyKey
+      });
+
+      if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
+        setError(response.error);
+        return;
+      }
+
+      await refreshAfterCommand(
+        studyId,
+        commandReloadError("reopenRequest"),
+        `Request ${compactId(response.value.requestId)} reopened for edits.`,
+        (nextAccess) =>
+          nextAccess?.request.id === requestId &&
+          nextAccess.request.status === "draft"
+      );
+    } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
+      setError(commandExceptionError("reopenRequest"));
+    } finally {
+      if (selectedStudyIdRef.current === studyId) {
+        setOperation("idle");
+      }
+    }
+  };
+
   const updateDraft = (field: keyof DraftForm, value: string) => {
     if (!derived.draftFieldsEditable) {
       return;
@@ -581,8 +719,10 @@ export function useRequesterWorkspaceController({
     draftForm,
     draftId: derived.draftId,
     error,
+    canReopenRejected: derived.canReopenRejected,
     isDraft: derived.isDraft,
     isSubmitted: derived.isSubmitted,
+    canWithdraw: derived.canWithdraw,
     notice,
     operationActive: derived.operationActive,
     operationStatus: derived.operationStatus,
@@ -592,6 +732,7 @@ export function useRequesterWorkspaceController({
     actions: {
       authenticate,
       createDraft,
+      reopenRejectedRequest,
       retrySelectedStudyRefresh,
       saveDraft,
       selectStudy,
@@ -599,6 +740,7 @@ export function useRequesterWorkspaceController({
       setAuthName,
       signOut,
       submitRequest,
+      withdrawRequest,
       updateDraft
     }
   };
