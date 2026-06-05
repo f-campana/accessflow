@@ -9,9 +9,9 @@ The product scenario is intentionally small: requesters ask for access to a synt
 This document describes the product spine and roadmap. It is not a claim that every role and command is implemented today. The current implementation is intentionally narrower:
 
 ```text
-implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, submit audit timeline
-next hardening: requester reliability, accessibility, docs, and quality gates from docs/40-review/requester-workflow-hardening-todo.md
-roadmap later: reviewer inbox, startReview, approveRequest, rejectRequest, withdrawRequest, revokeAccess, admin inspection
+implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, submit audit timeline, reviewer inbox/detail reads
+next hardening: reviewer read stability, accessibility, docs, and quality gates
+roadmap later: startReview, approveRequest, rejectRequest, withdrawRequest, revokeAccess, admin inspection
 ```
 
 The core command path is:
@@ -21,7 +21,7 @@ tRPC mutation
   -> authenticated actor
   -> authorization
   -> command service
-  -> XState transition check
+  -> workflow transition-table check
   -> Drizzle transaction
   -> persisted state
   -> audit event
@@ -42,19 +42,19 @@ Conform is deferred. Forms in v1 use plain React and HTML controls with Zod vali
 
 ## 3. Personas
 
-The target product has three roles. The current code implements only the requester-facing slice.
+The target product has three roles. The current code implements the requester-facing command slice and the reviewer read-only slice.
 
 Requester: implemented for creating and updating their own access request drafts, submitting requests, and viewing the status and audit timeline for their own requests. Withdrawing a submitted request is roadmap.
 
-Reviewer: roadmap. Reviewers will see submitted access requests, start review, approve or reject under-review requests, and provide decision notes where required. A reviewer should not be able to edit the requester-owned form payload directly.
+Reviewer: implemented for reading submitted access requests through reviewer inbox/detail projections and viewing the persisted audit timeline. Starting review, approval, rejection, and decision notes are roadmap. A reviewer should not be able to edit the requester-owned form payload directly.
 
 Admin: roadmap. Admin will inspect all requests and audit events. Admin exists for operational visibility and test coverage, not for a large management console in v1.
 
-There is no fake role switcher. Local development may seed users such as `requester@example.test`, `reviewer@example.test`, and `admin@example.test`, but users should authenticate through the real auth/session path.
+There is no fake role switcher. Local development seeds `requester@example.test`, `reviewer@example.test`, and `admin@example.test` with password `development-password`; those users authenticate through the real Better Auth credential/session path.
 
 ## 4. Workflow Lifecycle
 
-The workflow status is stored as a canonical enum. XState models transition legality and guard behavior, but the database status and audit log are the durable source of truth.
+The workflow status is stored as a canonical enum. In v1, a typed transition table models transition legality. The database status and audit log are the durable source of truth.
 
 Target workflow statuses:
 
@@ -86,9 +86,9 @@ rejected -> draft
 approved -> revoked
 ```
 
-XState is used only for workflow transitions. It must not manage field state, modal state, loading buttons, form dirtiness, tab selection, or page navigation. The client may use workflow helpers to display allowed actions, but the API remains authoritative. If the client predicts an action is allowed and the server rejects it, the server result wins.
+The transition table is used only for workflow transitions. It must not manage field state, modal state, loading buttons, form dirtiness, tab selection, or page navigation. The client may use workflow helpers to display allowed actions, but the API remains authoritative. If the client predicts an action is allowed and the server rejects it, the server result wins. XState is deferred until the workflow grows enough nested, parallel, or guarded behavior to justify it.
 
-The system persists the status enum and audit events. It does not persist full XState snapshots in v1.
+The system persists the status enum and audit events. It does not persist full state-machine snapshots in v1.
 
 ## 5. Commands
 
@@ -176,11 +176,12 @@ Initial authorization rules:
 
 ```text
 requester: create drafts, update own drafts, submit own requests, view own requests, withdraw own submitted requests
-reviewer roadmap: list submitted requests, start review, approve under-review requests, reject under-review requests
+reviewer: list submitted requests and read submitted request detail/timeline
+reviewer roadmap: start review, approve under-review requests, reject under-review requests
 admin roadmap: inspect all requests and audit events, revoke approved access
 ```
 
-The current requester implementation covers create/update/submit/view-own-request behavior. Request withdrawal, reviewer permissions, and admin permissions remain roadmap.
+The current requester implementation covers create/update/submit/view-own-request behavior. The current reviewer implementation covers read-only submitted-request projections. Request withdrawal, reviewer mutations, and admin permissions remain roadmap.
 
 Authorization should be enforced in the API command layer before state transitions are attempted.
 
@@ -261,13 +262,15 @@ withdraw action
 Reviewer surfaces:
 
 ```text
-roadmap later:
+implemented now:
 submitted request inbox
 request detail view
+audit timeline
+
+roadmap later:
 start review action
 approve action
 reject action with required reason
-audit timeline
 ```
 
 Admin surfaces:
@@ -288,7 +291,7 @@ The test plan should prove the command boundary and workflow invariant before ex
 Unit tests:
 
 ```text
-XState transition legality
+workflow transition-table legality
 Zod validation schemas
 Result/error helpers
 idempotency payload hashing
@@ -304,6 +307,8 @@ requester can create and submit own draft
 same idempotency key and payload returns original result
 same idempotency key and different payload returns IdempotencyConflict
 submit transition writes status update and audit event transactionally
+requester cannot access reviewer reads
+reviewer/admin can read submitted request projections
 
 roadmap later:
 requester cannot review own request
@@ -322,9 +327,10 @@ invalid submit shows field/form errors
 valid submit persists request and audit event
 refresh shows submitted status
 timeline shows persisted events
+reviewer sees submitted request in inbox
+reviewer sees persisted request detail/timeline
 
 roadmap later:
-reviewer sees request in inbox
 reviewer approves or rejects
 ```
 

@@ -9,6 +9,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "demo:reset": "pnpm --filter @accessflow/api db:migrate && pnpm --filter @accessflow/api db:reset-demo && pnpm --filter @accessflow/api db:seed",
     "dev": "pnpm --parallel --filter @accessflow/api --filter @accessflow/web dev",
     "mobile:preview": "node scripts/mobile-preview.mjs",
     "lint": "eslint eslint.config.mjs playwright.config.ts scripts tests && pnpm -r --if-present lint",
@@ -23,6 +24,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "drizzle-orm": "^0.45.2",
     "eslint": "^10.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",

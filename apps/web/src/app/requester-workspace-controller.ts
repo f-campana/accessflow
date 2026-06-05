@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  authErrorMessageFromBody,
   authErrorMessageFromCaught
 } from "./auth-errors";
 import {
@@ -40,22 +39,21 @@ import {
   type Study,
   type StudyAccess
 } from "./requester-workspace-model";
+import {
+  authPassword,
+  createClientId as createSessionClientId,
+  demoAccounts,
+  requestAuthJson,
+  type AuthMode,
+  type RequestAuthJson
+} from "./session-client";
 import { trpc } from "../trpc/client";
-
-export type AuthMode = "sign-up/email" | "sign-in/email";
-
-type AuthPath = AuthMode | "sign-out";
-
-type RequestJson = (
-  path: AuthPath,
-  payload: Record<string, unknown>
-) => Promise<void>;
 
 type TrpcClient = typeof trpc;
 
 type RequesterWorkspaceControllerDependencies = {
   createClientId?: () => string;
-  requestJson?: RequestJson;
+  requestJson?: RequestAuthJson;
   trpcClient?: TrpcClient;
 };
 
@@ -67,30 +65,7 @@ type RequesterWorkspaceControllerStateInput = {
   studies: Study[];
 };
 
-export const authPassword = "development-password";
-
-const apiBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-export const createRequesterClientId = () =>
-  globalThis.crypto?.randomUUID?.() ??
-  `fallback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-
-export const requestAuthJson: RequestJson = async (path, payload) => {
-  const response = await fetch(`${apiBaseUrl()}/api/auth/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    credentials: "include",
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(authErrorMessageFromBody(text, response.status));
-  }
-};
+export const createRequesterClientId = createSessionClientId;
 
 export const deriveRequesterWorkspaceControllerState = ({
   access,
@@ -135,8 +110,8 @@ export function useRequesterWorkspaceController({
   const [selectedStudyId, setSelectedStudyId] = useState<string>("");
   const [access, setAccess] = useState<StudyAccess>(null);
   const [draftForm, setDraftForm] = useState<DraftForm>(emptyDraftForm);
-  const [authEmail, setAuthEmail] = useState("");
-  const [authName, setAuthName] = useState("AccessFlow Requester");
+  const [authEmail, setAuthEmail] = useState<string>(demoAccounts.requester.email);
+  const [authName, setAuthName] = useState<string>(demoAccounts.requester.name);
   const [operation, setOperation] =
     useState<RequesterOperation>("loadingWorkspace");
   const [notice, setNotice] = useState<string | null>(null);
@@ -152,10 +127,6 @@ export function useRequesterWorkspaceController({
   }
 
   const accessRequestGuard = accessRequestGuardRef.current;
-
-  useEffect(() => {
-    setAuthEmail(`requester-${createClientId()}@example.test`);
-  }, [createClientId]);
 
   useEffect(() => {
     selectedStudyIdRef.current = selectedStudyId;
@@ -304,15 +275,28 @@ export function useRequesterWorkspaceController({
     accessRequestGuard.invalidate();
 
     try {
+      const normalizedEmail = authEmail.trim().toLowerCase();
+      const shouldGenerateNewRequester =
+        mode === "sign-up/email" &&
+        normalizedEmail === demoAccounts.requester.email;
+      const nextEmail = shouldGenerateNewRequester
+        ? `requester-${createClientId()}@example.test`
+        : normalizedEmail;
+      const nextName = authName.trim() || demoAccounts.requester.name;
+
+      if (nextEmail !== authEmail) {
+        setAuthEmail(nextEmail);
+      }
+
       await requestJson(mode, {
-        name: authName,
-        email: authEmail,
+        name: nextName,
+        email: nextEmail,
         password: authPassword
       });
       await loadWorkspace();
       setNotice(
         mode === "sign-up/email"
-          ? "Signed up with a requester session."
+          ? `Created requester account ${nextEmail}.`
           : "Signed in with a requester session."
       );
     } catch (caught) {

@@ -1,5 +1,6 @@
 import { studies } from "./schema";
 import { db, pool } from "./client";
+import { demoAuthPassword, seedDemoAccounts } from "./demo-accounts";
 
 const [study] = await db
   .insert(studies)
@@ -29,5 +30,13 @@ if (!study) {
 }
 
 console.log(`Seeded study workspace: ${study.slug} (${study.id})`);
+
+const seededAccounts = await seedDemoAccounts();
+
+for (const account of seededAccounts) {
+  console.log(`Seeded ${account.role} demo account: ${account.email}`);
+}
+
+console.log(`Demo account password: ${demoAuthPassword}`);
 
 await pool.end();

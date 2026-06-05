@@ -272,8 +272,9 @@ log("Starting local Postgres.");
 run(compose.command, [...compose.args, "up", "-d", "postgres"], env);
 await waitForPostgres();
 
-log("Applying migrations and seed data.");
+log("Applying migrations, resetting demo data, and seeding clean preview state.");
 run("pnpm", ["--filter", "@accessflow/api", "db:migrate"], env);
+run("pnpm", ["--filter", "@accessflow/api", "db:reset-demo"], env);
 run("pnpm", ["--filter", "@accessflow/api", "db:seed"], env);
 
 log("Building web app.");
@@ -291,4 +292,9 @@ console.log("");
 console.log("AccessFlow mobile preview is ready.");
 console.log(`Open this URL on your phone: http://${lanAddress}:${portWeb}`);
 console.log(`API health: http://${lanAddress}:${portApi}/health`);
+console.log("");
+console.log("Seeded local demo accounts:");
+console.log("  requester@example.test / development-password");
+console.log("  reviewer@example.test / development-password");
+console.log("  admin@example.test / development-password");
 console.log("");

@@ -25,6 +25,7 @@ const run = (command, args) => {
 
 run("docker-compose", ["up", "-d", "postgres"]);
 run("pnpm", ["--filter", "@accessflow/api", "db:migrate"]);
+run("pnpm", ["--filter", "@accessflow/api", "db:reset-demo"]);
 run("pnpm", ["--filter", "@accessflow/api", "db:seed"]);
 
 const child = spawn(

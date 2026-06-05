@@ -22,25 +22,28 @@ Implemented API coverage:
 - `createDraft`, `saveDraft`, and `submitRequest` command services.
 - tRPC mutations for those commands.
 - tRPC reads for the current actor, study list, and requester study access state.
+- tRPC reviewer reads for submitted-request inbox/detail projections.
 - Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
+- Reviewer/admin read authorization for submitted request projections.
 
 Implemented web coverage:
 
 - Real local sign-up/sign-in through the API auth path.
 - Study entry point backed by seeded Postgres data.
 - Draft creation, draft saving, submission, typed error rendering, persisted status, and audit timeline.
+- Reviewer read-only queue/detail view for submitted requests and persisted audit timeline.
 
 Current focus:
 
-- Keep the requester lifecycle honest end to end before expanding product surface area.
-- Do not build reviewer/admin flows until the requester submit path is reliable under failure and retry.
+- Keep requester and reviewer-read surfaces honest before adding reviewer workflow mutations.
+- Do not build reviewer approve/reject/start-review mutations until the read surface, authorization model, and tests are stable.
 
 Current implementation stops at the requester workflow:
 
 ```text
-implemented: sign up/sign in, study read, draft create/save, submit, persisted audit timeline
-next: finish the requester hardening backlog in docs/40-review/requester-workflow-hardening-todo.md
-later roadmap: reviewer/admin inboxes, review decisions, withdrawal/revocation, broader operational surfaces
+implemented: sign up/sign in, study read, draft create/save, submit, requester persisted audit timeline, reviewer submitted-request inbox/detail reads
+next: harden reviewer reads and design reviewer mutations deliberately
+later roadmap: review decisions, withdrawal/revocation, admin inspection, broader operational surfaces
 ```
 
 ## Read First
@@ -78,10 +81,26 @@ Run migrations:
 pnpm --filter @accessflow/api db:migrate
 ```
 
-Seed the synthetic study workspace:
+Seed the synthetic study workspace and stable demo accounts without deleting existing local data:
 
 ```bash
 pnpm --filter @accessflow/api db:seed
+```
+
+Reset the local preview database to a clean demo baseline:
+
+```bash
+pnpm demo:reset
+```
+
+`demo:reset` only runs against the local preview database at `localhost:55433/accessflow`. It applies migrations, deletes old demo studies/requests/users from that local database, then seeds one study and the stable demo accounts.
+
+Seeded local credentials:
+
+```text
+requester@example.test / development-password
+reviewer@example.test / development-password
+admin@example.test / development-password
 ```
 
 Run development servers:
@@ -103,9 +122,18 @@ For phone testing on the local network, use the production-style preview:
 pnpm mobile:preview
 ```
 
-That command starts Postgres, applies API migrations, seeds the synthetic study workspace, builds the web app, and prints the LAN URL to open on a phone.
+That command starts Postgres, applies API migrations, seeds the synthetic study workspace and demo accounts, builds the web app, and prints the LAN URL plus local credentials to use on a phone.
 
-For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover sign-up, seeded study visibility, draft creation, submission, persisted audit timeline, readable auth errors, and no horizontal overflow at phone width.
+`mobile:preview` resets the local preview database before seeding. Each run starts from:
+
+```text
+1 synthetic study
+3 demo users
+0 study access requests
+0 stale generated studies
+```
+
+For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, readable auth errors, and no horizontal overflow at phone width.
 
 For repeatable requester workflow browser coverage, install the Playwright browser once:
 
@@ -119,7 +147,7 @@ Then run:
 pnpm test:e2e
 ```
 
-This starts the local Postgres/API/web stack through Playwright and exercises the requester path at phone width.
+This starts the local Postgres/API/web stack through Playwright from the same clean demo baseline and exercises the requester path and reviewer read path at phone width.
 
 ## Verification
 
@@ -137,10 +165,9 @@ The API test runner uses an isolated `accessflow_test` database by default so ve
 
 See `docs/30-quality/repo-quality-gate.md` for the full pass-closing standard.
 
-See `docs/40-review/requester-workflow-hardening-todo.md` for the ordered hardening backlog. Process it one issue per pass before expanding the product surface.
+See `docs/40-review/requester-workflow-hardening-todo.md` for the completed requester hardening backlog and `docs/40-review/post-hardening-review-checkpoint.md` for the reviewer-read start recommendation.
 
-Reviewer/admin flows are deliberately roadmap-only until that requester hardening backlog is substantially complete.
-For immediate next work, the backlog is the source of truth over broader roadmap language in the product brief.
+Reviewer workflow mutations are deliberately roadmap-only until reviewer read authorization/projections are stable.
 
 ## Boundaries
 

@@ -78,7 +78,7 @@ The smoke check must cover the affected workflow, not only page load.
 
 For the requester path, verify:
 
-1. sign-up and sign-in behavior
+1. seeded requester sign-in and new requester account creation
 2. friendly auth errors, with no raw JSON shown to the user
 3. seeded study visibility
 4. draft creation
@@ -86,7 +86,7 @@ For the requester path, verify:
 6. request submission
 7. persisted `submitted` state
 8. audit timeline event
-9. refresh does not lie about workflow state
+9. sign-out/sign-in and refresh do not lie about workflow state
 10. no browser console errors or warnings
 11. no horizontal overflow at phone width
 
@@ -104,6 +104,8 @@ pnpm exec playwright install chromium
 
 The e2e gate starts the local Postgres/API/web stack through Playwright, runs a mobile-width Chromium workflow, checks the requester happy path and empty-submit validation path, reloads to prove persisted state, verifies the audit timeline, captures page errors/console warnings, and asserts no horizontal overflow.
 
+The e2e startup resets the local preview database before seeding, so it should begin with one study, three demo users, and no existing access requests.
+
 ## Mobile Preview Gate
 
 For phone or local-network review, use:
@@ -112,7 +114,16 @@ For phone or local-network review, use:
 pnpm mobile:preview
 ```
 
-This command starts Postgres, applies migrations, seeds the synthetic study workspace, builds the web app, starts the API and web servers, and prints the LAN URL for a phone.
+This command starts Postgres, applies migrations, resets the local preview database, seeds the synthetic study workspace plus requester/reviewer/admin demo accounts, builds the web app, starts the API and web servers, and prints the LAN URL and credentials for a phone.
+
+Each preview run should start from:
+
+```text
+studies: 1
+users: 3
+study access requests: 0
+reviewer queue: empty until the current test creates a request
+```
 
 Use this path instead of relying on plain Next dev server behavior when validating the app from an iPhone.
 
@@ -120,6 +131,7 @@ The preview helper is intentionally conservative:
 
 - it uses `DATABASE_URL` only through a validated local preview URL
 - `ACCESSFLOW_PREVIEW_DATABASE_URL` must still point to `localhost:55433/accessflow`
+- it refuses demo reset unless the target is the local preview database
 - it refuses to start if ports `3000` or `4000` are already occupied
 - it supports either `docker compose` or `docker-compose`
 - it prints the phone URL only after Postgres, the API, the web server, and the LAN web URL are reachable

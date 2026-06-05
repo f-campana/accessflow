@@ -13,7 +13,8 @@ import {
   studies,
   studyAccessAuditEvents,
   studyAccessRequestDrafts,
-  studyAccessRequests
+  studyAccessRequests,
+  users
 } from "../db/schema";
 
 const toIso = (value: Date | null) => (value ? value.toISOString() : null);
@@ -37,6 +38,59 @@ export type RequesterStudyAccess = {
     createdAt: string;
     updatedAt: string;
   };
+  draft: {
+    id: string;
+    purpose: string | null;
+    requestedRole: RequestedStudyRole | null;
+    justification: string | null;
+    affiliation: string | null;
+    supportingNotes: string | null;
+    updatedAt: string;
+  } | null;
+  auditEvents: Array<{
+    id: string;
+    eventType: WorkflowEventType;
+    fromStatus: StudyAccessRequestStatus;
+    toStatus: StudyAccessRequestStatus;
+    note: string | null;
+    createdAt: string;
+  }>;
+};
+
+export type ReviewerInboxItem = {
+  request: {
+    id: string;
+    status: "submitted";
+    requestedRole: RequestedStudyRole;
+    submittedAt: string;
+    updatedAt: string;
+  };
+  requester: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  study: StudySummary;
+  draft: {
+    purpose: string | null;
+    affiliation: string | null;
+  } | null;
+};
+
+export type ReviewerStudyAccessDetail = {
+  request: {
+    id: string;
+    status: "submitted";
+    requestedRole: RequestedStudyRole;
+    submittedAt: string;
+    updatedAt: string;
+  };
+  requester: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  study: StudySummary;
   draft: {
     id: string;
     purpose: string | null;
@@ -140,6 +194,185 @@ export const getRequesterStudyAccess = async (
       decisionNote: request.decisionNote,
       createdAt: request.createdAt.toISOString(),
       updatedAt: request.updatedAt.toISOString()
+    },
+    draft: draft
+      ? {
+          id: draft.id,
+          purpose: draft.purpose,
+          requestedRole: parsePersistedRequestedStudyRole(draft.requestedRole),
+          justification: draft.justification,
+          affiliation: draft.affiliation,
+          supportingNotes: draft.supportingNotes,
+          updatedAt: draft.updatedAt.toISOString()
+        }
+      : null,
+    auditEvents: auditEvents.map((event) => ({
+      id: event.id,
+      eventType: event.eventType,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      note: event.note,
+      createdAt: event.createdAt.toISOString()
+    }))
+  };
+};
+
+const parseSubmittedRequestedRole = (value: string | null): RequestedStudyRole => {
+  const requestedRole = parsePersistedRequestedStudyRole(value);
+
+  if (!requestedRole) {
+    throw new Error("Submitted request is missing a requested role");
+  }
+
+  return requestedRole;
+};
+
+const reviewerSubmittedRequestWhere = (requestId?: string) =>
+  requestId
+    ? and(eq(studyAccessRequests.id, requestId), eq(studyAccessRequests.status, "submitted"))
+    : eq(studyAccessRequests.status, "submitted");
+
+export const listReviewerStudyAccessRequests = async (): Promise<
+  ReviewerInboxItem[]
+> => {
+  const rows = await db
+    .select({
+      requestId: studyAccessRequests.id,
+      status: studyAccessRequests.status,
+      requestedRole: studyAccessRequests.requestedRole,
+      submittedAt: studyAccessRequests.submittedAt,
+      requestUpdatedAt: studyAccessRequests.updatedAt,
+      requesterId: users.id,
+      requesterEmail: users.email,
+      requesterName: users.name,
+      studyId: studies.id,
+      studySlug: studies.slug,
+      studyDisplayName: studies.displayName,
+      studyShortDescription: studies.shortDescription,
+      studySensitivityLabel: studies.sensitivityLabel,
+      draftPurpose: studyAccessRequestDrafts.purpose,
+      draftAffiliation: studyAccessRequestDrafts.affiliation
+    })
+    .from(studyAccessRequests)
+    .innerJoin(users, eq(users.id, studyAccessRequests.requesterId))
+    .innerJoin(studies, eq(studies.id, studyAccessRequests.studyId))
+    .leftJoin(
+      studyAccessRequestDrafts,
+      eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
+    )
+    .where(reviewerSubmittedRequestWhere())
+    .orderBy(
+      asc(studyAccessRequests.submittedAt),
+      asc(studyAccessRequests.id)
+    );
+
+  return rows.map((row) => ({
+    request: {
+      id: row.requestId,
+      status: "submitted",
+      requestedRole: parseSubmittedRequestedRole(row.requestedRole),
+      submittedAt: row.submittedAt?.toISOString() ?? "",
+      updatedAt: row.requestUpdatedAt.toISOString()
+    },
+    requester: {
+      id: row.requesterId,
+      email: row.requesterEmail,
+      name: row.requesterName
+    },
+    study: {
+      id: row.studyId,
+      slug: row.studySlug,
+      displayName: row.studyDisplayName,
+      shortDescription: row.studyShortDescription,
+      sensitivityLabel: row.studySensitivityLabel
+    },
+    draft: row.draftPurpose || row.draftAffiliation
+      ? {
+          purpose: row.draftPurpose,
+          affiliation: row.draftAffiliation
+        }
+      : null
+  }));
+};
+
+export const getReviewerStudyAccessDetail = async (
+  requestId: string
+): Promise<ReviewerStudyAccessDetail | null> => {
+  const [row] = await db
+    .select({
+      requestId: studyAccessRequests.id,
+      status: studyAccessRequests.status,
+      requestedRole: studyAccessRequests.requestedRole,
+      submittedAt: studyAccessRequests.submittedAt,
+      requestUpdatedAt: studyAccessRequests.updatedAt,
+      requesterId: users.id,
+      requesterEmail: users.email,
+      requesterName: users.name,
+      studyId: studies.id,
+      studySlug: studies.slug,
+      studyDisplayName: studies.displayName,
+      studyShortDescription: studies.shortDescription,
+      studySensitivityLabel: studies.sensitivityLabel
+    })
+    .from(studyAccessRequests)
+    .innerJoin(users, eq(users.id, studyAccessRequests.requesterId))
+    .innerJoin(studies, eq(studies.id, studyAccessRequests.studyId))
+    .where(reviewerSubmittedRequestWhere(requestId))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [draft] = await db
+    .select({
+      id: studyAccessRequestDrafts.id,
+      purpose: studyAccessRequestDrafts.purpose,
+      requestedRole: studyAccessRequestDrafts.requestedRole,
+      justification: studyAccessRequestDrafts.justification,
+      affiliation: studyAccessRequestDrafts.affiliation,
+      supportingNotes: studyAccessRequestDrafts.supportingNotes,
+      updatedAt: studyAccessRequestDrafts.updatedAt
+    })
+    .from(studyAccessRequestDrafts)
+    .where(eq(studyAccessRequestDrafts.requestId, requestId))
+    .limit(1);
+
+  const auditEvents = await db
+    .select({
+      id: studyAccessAuditEvents.id,
+      eventType: studyAccessAuditEvents.eventType,
+      fromStatus: studyAccessAuditEvents.fromStatus,
+      toStatus: studyAccessAuditEvents.toStatus,
+      note: studyAccessAuditEvents.note,
+      createdAt: studyAccessAuditEvents.createdAt
+    })
+    .from(studyAccessAuditEvents)
+    .where(eq(studyAccessAuditEvents.requestId, requestId))
+    .orderBy(
+      asc(studyAccessAuditEvents.createdAt),
+      asc(studyAccessAuditEvents.id)
+    );
+
+  return {
+    request: {
+      id: row.requestId,
+      status: "submitted",
+      requestedRole: parseSubmittedRequestedRole(row.requestedRole),
+      submittedAt: row.submittedAt?.toISOString() ?? "",
+      updatedAt: row.requestUpdatedAt.toISOString()
+    },
+    requester: {
+      id: row.requesterId,
+      email: row.requesterEmail,
+      name: row.requesterName
+    },
+    study: {
+      id: row.studyId,
+      slug: row.studySlug,
+      displayName: row.studyDisplayName,
+      shortDescription: row.studyShortDescription,
+      sensitivityLabel: row.studySensitivityLabel
     },
     draft: draft
       ? {

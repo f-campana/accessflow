@@ -5,10 +5,17 @@ import {
   submitRequest
 } from "./commands/study-access";
 import {
+  getReviewerStudyAccessDetail,
   getRequesterStudyAccess,
+  listReviewerStudyAccessRequests,
   listStudies
 } from "./queries/study-access";
-import { authenticatedProcedure, publicProcedure, router } from "./trpc";
+import {
+  authenticatedProcedure,
+  publicProcedure,
+  reviewerProcedure,
+  router
+} from "./trpc";
 import { z } from "zod";
 
 const authenticatedCommandProcedure = authenticatedProcedure.input(z.unknown());
@@ -23,6 +30,12 @@ export const appRouter = router({
   myStudyAccess: authenticatedProcedure
     .input(z.object({ studyId: z.uuid() }))
     .query(({ ctx, input }) => getRequesterStudyAccess(ctx.actor, input.studyId)),
+  reviewerInbox: reviewerProcedure.query(() =>
+    listReviewerStudyAccessRequests()
+  ),
+  reviewerStudyAccessDetail: reviewerProcedure
+    .input(z.object({ requestId: z.uuid() }))
+    .query(({ input }) => getReviewerStudyAccessDetail(input.requestId)),
   createDraft: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
     toCommandResponse(await createDraft(ctx.actor, input))
   ),

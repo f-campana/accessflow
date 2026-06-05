@@ -24,3 +24,21 @@ const requireActor = t.middleware(({ ctx, next }) => {
 });
 
 export const authenticatedProcedure = t.procedure.use(requireActor);
+
+const requireReviewerRead = t.middleware(({ ctx, next }) => {
+  if (ctx.actor?.role !== "reviewer" && ctx.actor?.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Reviewer access required"
+    });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      actor: ctx.actor
+    }
+  });
+});
+
+export const reviewerProcedure = authenticatedProcedure.use(requireReviewerRead);

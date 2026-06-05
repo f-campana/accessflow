@@ -107,7 +107,9 @@ label {
 .topbar,
 .topbar > div,
 .workspace-grid,
+.reviewer-grid,
 .workspace-grid > *,
+.reviewer-grid > *,
 .panel,
 .section-heading,
 .section-heading > *,
@@ -123,7 +125,15 @@ label {
 .empty-state,
 .submitted-note,
 .timeline-list,
-.timeline-list li > div {
+.timeline-list li > div,
+.reviewer-list,
+.reviewer-list li,
+.reviewer-list-button,
+.reviewer-list-button > span,
+.reviewer-detail-grid,
+.field-list,
+.field-list > *,
+.field-list dd {
   min-width: 0;
 }
 
@@ -212,6 +222,13 @@ label {
   align-items: start;
 }
 
+.reviewer-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(380px, 1.25fr);
+  gap: 18px;
+  align-items: start;
+}
+
 .panel {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -226,6 +243,8 @@ label {
 }
 
 .study-panel,
+.reviewer-detail,
+.reviewer-inbox,
 .timeline-panel {
   display: grid;
   gap: 18px;
@@ -440,6 +459,70 @@ label {
   font-size: 0.9rem;
 }
 
+.reviewer-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewer-list-button {
+  display: flex;
+  width: 100%;
+  height: auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+}
+
+.reviewer-list-button.selected {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.reviewer-list-button > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.reviewer-list-button span span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.reviewer-detail-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.field-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.field-list div {
+  display: grid;
+  gap: 4px;
+}
+
+.field-list dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.field-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 18px;
@@ -461,6 +544,10 @@ label {
   }
 
   .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reviewer-grid {
     grid-template-columns: 1fr;
   }
 

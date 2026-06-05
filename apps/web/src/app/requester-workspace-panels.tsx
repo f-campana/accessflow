@@ -29,6 +29,7 @@ import {
   commandErrorFormMessages
 } from "./requester-error-copy";
 import { compactId } from "./requester-workspace-model";
+import { demoAccounts } from "./session-client";
 
 const requestedStudyRoleLabels = {
   analyst: "Analyst",
@@ -93,7 +94,10 @@ export function AuthPanel({
     <section className="panel auth-panel" aria-labelledby="auth-title">
       <div>
         <p className="eyebrow">Requester login</p>
-        <h2 id="auth-title">Start with a real local session</h2>
+        <h2 id="auth-title">Use seeded access or create a requester</h2>
+        <p className="form-hint">
+          Seeded requester: {demoAccounts.requester.email}
+        </p>
       </div>
 
       <label>
@@ -132,7 +136,7 @@ export function AuthPanel({
           onClick={() => onAuthenticate("sign-up/email")}
           disabled={busy}
         >
-          Sign up
+          Create new requester
         </button>
         <button
           type="button"

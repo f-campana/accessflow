@@ -20,6 +20,7 @@
     "test": "tsx src/test-helpers/run-tests.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:reset-demo": "tsx src/db/reset-demo.ts",
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {

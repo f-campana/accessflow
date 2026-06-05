@@ -18,7 +18,7 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
-Current implementation scope is requester-only: sign-up/sign-in, study read, draft create/save, submit, and persisted audit timeline. Reviewer/admin commands and UI are roadmap until the requester hardening backlog is substantially complete. For immediate next work, `docs/40-review/requester-workflow-hardening-todo.md` overrides broader roadmap language.
+Current implementation scope is requester workflow plus reviewer read-only workflow: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, requester audit timeline, reviewer inbox/detail reads, and reviewer audit timeline reads. Reviewer/admin workflow mutations are roadmap until the reviewer read surface is stable.
 
 ## Project Shape
 
@@ -26,7 +26,7 @@ Current implementation scope is requester-only: sign-up/sign-in, study read, dra
 apps/web      Next.js App Router, UI, forms, tRPC client
 apps/api      Fastify, tRPC server, Better Auth, Drizzle/Postgres, commands
 packages/core Minimal Result/AppError/fromZod/assertNever helpers
-packages/workflow Pure workflow statuses, events, XState transition helpers
+packages/workflow Pure workflow statuses, events, and transition-table helpers
 ```
 
 Keep ownership strict:
@@ -39,10 +39,12 @@ Keep ownership strict:
 ## Implementation Rules
 
 - Do not fake authentication or add a role switcher.
+- Keep local human-test auth deterministic: `db:seed` must provide requester/reviewer/admin demo users through the real Better Auth credential path.
+- Keep local preview state deterministic: `pnpm mobile:preview` and `pnpm test:e2e` must reset the local `localhost:55433/accessflow` preview database before seeding.
 - Do not add UI that claims a workflow action succeeded before the API persists it.
 - Keep command services outside tRPC routers. Routers are adapters, not the business logic layer.
-- Use XState only for workflow transition legality. Do not use it for form field state, modal state, loading buttons, tabs, or local UI dirtiness.
-- Persist canonical status values and audit events. Do not persist full XState snapshots in v1.
+- Use the typed workflow transition table as the canonical v1 transition model. Reconsider XState only if workflow behavior becomes complex enough to earn it.
+- Persist canonical status values and audit events. Do not persist full state-machine snapshots in v1.
 - Keep forms plain React/HTML in v1. Conform is deferred.
 - Do not claim HIPAA, GDPR, clinical-grade, or medical-device compliance.
 - Do not add document uploads, notifications, queues, analytics, tenants/orgs, or a generic workflow builder unless explicitly requested.
@@ -59,7 +61,7 @@ tRPC mutation
   -> authenticated actor
   -> authorization
   -> command service
-  -> XState transition check
+  -> workflow transition-table check
   -> Drizzle transaction
   -> persisted state
   -> audit event
@@ -94,7 +96,7 @@ For any user-visible web change, also run a real rendered smoke check before rep
 - Playwright/browser automation at desktop and mobile widths
 - iOS Simulator only when explicitly validating Safari/iPhone behavior
 
-The smoke check should cover the affected workflow, not only page load. For the requester path, verify sign-up/sign-in, seeded study visibility, draft creation, submission, persisted audit event rendering, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
+The smoke check should cover the affected workflow, not only page load. For the requester path, verify seeded sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit event rendering after sign-out/sign-in, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
 
 If dependencies change:
 
@@ -114,6 +116,15 @@ If local Postgres is needed:
 docker compose up -d postgres
 pnpm --filter @accessflow/api db:migrate
 ```
+
+For a clean human-test baseline:
+
+```text
+pnpm demo:reset
+pnpm mobile:preview
+```
+
+`demo:reset` is intentionally destructive but guarded: it may only reset the local preview database at `localhost:55433/accessflow`. Do not weaken that safety check.
 
 Report clearly if Docker/Postgres is unavailable.
 

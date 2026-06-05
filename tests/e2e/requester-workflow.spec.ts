@@ -1,9 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const password = "development-password";
+import { createDraft, submitRequest } from "../../apps/api/src/commands/study-access";
+import {
+  demoAccounts,
+  demoAuthPassword
+} from "../../apps/api/src/db/demo-accounts";
+import { db, pool } from "../../apps/api/src/db/client";
+import { studies, users } from "../../apps/api/src/db/schema";
 
 const uniqueRequesterEmail = () =>
   `requester-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`;
+
+const demoReviewer = demoAccounts.find((account) => account.role === "reviewer");
+
+if (!demoReviewer) {
+  throw new Error("Reviewer demo account seed is missing");
+}
+
+test.afterAll(async () => {
+  await pool.end();
+});
 
 const expectNoHorizontalOverflow = async (page: Page) => {
   const overflow = await page.evaluate(() => ({
@@ -75,9 +91,11 @@ test("requester can submit a durable study access request", async ({ page }) => 
   ).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByLabel("Email").fill(uniqueRequesterEmail());
-  await expect(page.getByLabel("Password")).toHaveValue(password);
-  await page.getByRole("button", { name: "Sign up" }).click();
+  const requesterEmail = uniqueRequesterEmail();
+
+  await page.getByLabel("Email").fill(requesterEmail);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Create new requester" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
@@ -198,6 +216,120 @@ test("requester can submit a durable study access request", async ({ page }) => 
   await expect(page.getByText("submitRequest")).toBeVisible();
   await expect(page.getByText("draft to submitted")).toBeVisible();
   await expect(page.getByLabel("Purpose")).toBeDisabled();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByText("No active session")).toBeVisible();
+
+  await page.reload();
+
+  await expect(page.getByText("No active session")).toBeVisible();
+  await page.getByLabel("Email").fill(requesterEmail);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("Signed in with a requester session.")).toBeVisible();
+  await expect(page.getByText("submitted", { exact: true })).toBeVisible();
+  await expect(page.getByText("submitRequest")).toBeVisible();
+  await expect(page.getByText("draft to submitted")).toBeVisible();
+  await expect(page.getByLabel("Purpose")).toBeDisabled();
+  await expectNoHorizontalOverflow(page);
+
+  expect(consoleMessages).toEqual([]);
+});
+
+test("reviewer can inspect submitted requests without mutations", async ({ page }) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const requesterEmail = uniqueRequesterEmail();
+  const studyName = `Reviewer Study ${Date.now()}`;
+  const purpose = "Inspect submitted workflow evidence in a reviewer queue.";
+  const justification = "Reviewer needs to confirm the persisted submission.";
+
+  const requester = {
+    id: crypto.randomUUID(),
+    email: requesterEmail,
+    role: "requester" as const
+  };
+
+  await db.insert(users).values({
+    id: requester.id,
+    name: requesterEmail,
+    email: requester.email,
+    emailVerified: true,
+    role: requester.role
+  });
+
+  const [study] = await db
+    .insert(studies)
+    .values({
+      slug: `reviewer-study-${crypto.randomUUID()}`,
+      displayName: studyName,
+      shortDescription: "Synthetic reviewer e2e workspace.",
+      sensitivityLabel: "Synthetic regulated workspace"
+    })
+    .returning({ id: studies.id });
+
+  if (!study) {
+    throw new Error("Failed to create reviewer e2e study");
+  }
+
+  const created = await createDraft(requester, { studyId: study.id });
+
+  if (!created.ok) {
+    throw new Error(created.error.message);
+  }
+
+  const submitted = await submitRequest(requester, {
+    draftId: created.value.draftId,
+    idempotencyKey: `reviewer-e2e-${crypto.randomUUID()}`,
+    purpose,
+    requestedRole: "viewer",
+    justification,
+    affiliation: "AccessFlow Reviewer E2E"
+  });
+
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/reviewer");
+
+  await expect(page.getByRole("heading", { name: "Reviewer queue" })).toBeVisible();
+  await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(
+    page.getByText("Signed in with reviewer access.")
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Submitted requests" })
+  ).toBeVisible();
+
+  const seededRequest = page
+    .getByRole("button")
+    .filter({ hasText: studyName })
+    .filter({ hasText: requesterEmail });
+
+  await expect(seededRequest).toBeVisible();
+  await seededRequest.click();
+
+  await expect(page.getByText(purpose)).toBeVisible();
+  await expect(page.getByText(justification)).toBeVisible();
+  await expect(page.getByText("submitRequest")).toBeVisible();
+  await expect(page.getByText("draft to submitted")).toBeVisible();
+  await expect(page.getByRole("button", { name: /approve/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /reject/i })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   expect(consoleMessages).toEqual([]);

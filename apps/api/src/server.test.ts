@@ -3,6 +3,11 @@ import type { FastifyInstance } from "fastify";
 
 import { buildServer } from "./server";
 import { createTestStudy, resetDatabase } from "./test-helpers/db";
+import {
+  demoAccounts,
+  demoAuthPassword,
+  seedDemoAccounts
+} from "./db/demo-accounts";
 
 type TrpcSuccessEnvelope<T> = [
   {
@@ -112,6 +117,23 @@ const signUpRequester = async (server: FastifyInstance) => {
   };
 };
 
+const signInEmail = async (server: FastifyInstance, email: string) => {
+  const signIn = await server.inject({
+    method: "POST",
+    url: "/api/auth/sign-in/email",
+    payload: {
+      email,
+      password: demoAuthPassword
+    }
+  });
+  const cookieHeader = cookieHeaderFrom(signIn.headers["set-cookie"]);
+
+  expect(signIn.statusCode).toBeLessThan(300);
+  expect(cookieHeader).toContain("better-auth");
+
+  return cookieHeader;
+};
+
 const expectCommandValidationFailure = async (
   server: FastifyInstance,
   cookieHeader: string,
@@ -192,6 +214,31 @@ describe("api server", () => {
         })
       })
     );
+  });
+
+  it("seeds stable demo users that sign in through Better Auth", async () => {
+    await seedDemoAccounts();
+
+    for (const account of demoAccounts) {
+      const cookieHeader = await signInEmail(server, account.email);
+      const session = await server.inject({
+        method: "GET",
+        url: "/api/auth/get-session",
+        headers: {
+          cookie: cookieHeader
+        }
+      });
+
+      expect(session.statusCode).toBe(200);
+      expect(session.json()).toEqual(
+        expect.objectContaining({
+          user: expect.objectContaining({
+            email: account.email,
+            role: account.role
+          })
+        })
+      );
+    }
   });
 
   it("resolves the tRPC actor from a real Better Auth cookie", async () => {
