@@ -66,10 +66,12 @@ export const startReviewInputSchema = z.object({
 });
 
 export const approveRequestInputSchema = z.object({
-  requestId: z.uuid()
+  requestId: z.uuid(),
+  idempotencyKey: z.string().trim().min(8).max(128)
 });
 
 export const rejectRequestInputSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(128),
   requestId: z.uuid(),
   reason: z
     .string()

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db/client";
 import {
+  idempotencyKeys,
   studyAccessAuditEvents,
   studyAccessRequests
 } from "../../db/schema";
@@ -71,6 +72,8 @@ const getAuditEvents = async (requestId: string) =>
     .where(eq(studyAccessAuditEvents.requestId, requestId))
     .orderBy(studyAccessAuditEvents.createdAt, studyAccessAuditEvents.id);
 
+const decisionKey = (name: string) => `${name}-${crypto.randomUUID()}`;
+
 describe("review decisions", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -83,7 +86,10 @@ describe("review decisions", () => {
   it("approves an under-review request and writes a durable audit event", async () => {
     const { requestId, reviewer } = await createUnderReviewRequest();
 
-    const result = await approveRequest(reviewer, { requestId });
+    const result = await approveRequest(reviewer, {
+      requestId,
+      idempotencyKey: decisionKey("approve")
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -120,7 +126,11 @@ describe("review decisions", () => {
     const { requestId, reviewer } = await createUnderReviewRequest();
     const reason = "Requested access is broader than the current study need.";
 
-    const result = await rejectRequest(reviewer, { requestId, reason });
+    const result = await rejectRequest(reviewer, {
+      requestId,
+      idempotencyKey: decisionKey("reject"),
+      reason
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -158,7 +168,10 @@ describe("review decisions", () => {
     const { requestId } = await createUnderReviewRequest();
     const admin = await createTestActor("admin");
 
-    const result = await approveRequest(admin, { requestId });
+    const result = await approveRequest(admin, {
+      requestId,
+      idempotencyKey: decisionKey("admin-approve")
+    });
 
     expect(result.ok).toBe(true);
   });
@@ -181,6 +194,7 @@ describe("review decisions", () => {
     const { requestId, reviewer } = await createUnderReviewRequest();
 
     const result = await rejectRequest(reviewer, {
+      idempotencyKey: decisionKey("blank-reject"),
       requestId,
       reason: "   "
     });
@@ -211,7 +225,8 @@ describe("review decisions", () => {
     const reviewer = await createTestActor("reviewer");
 
     const result = await approveRequest(reviewer, {
-      requestId: crypto.randomUUID()
+      requestId: crypto.randomUUID(),
+      idempotencyKey: decisionKey("not-found-approve")
     });
 
     expect(result.ok).toBe(false);
@@ -241,7 +256,8 @@ describe("review decisions", () => {
     }
 
     const result = await approveRequest(reviewer, {
-      requestId: submitted.value.requestId
+      requestId: submitted.value.requestId,
+      idempotencyKey: decisionKey("invalid-approve")
     });
 
     expect(result.ok).toBe(false);
@@ -250,11 +266,76 @@ describe("review decisions", () => {
     }
   });
 
-  it("does not write a second decision audit event on duplicate decisions", async () => {
+  it("replays duplicate decisions with the same idempotency key", async () => {
+    const { requestId, reviewer } = await createUnderReviewRequest();
+    const idempotencyKey = decisionKey("replay-approve");
+
+    const first = await approveRequest(reviewer, { requestId, idempotencyKey });
+    const second = await approveRequest(reviewer, { requestId, idempotencyKey });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.value).toEqual(first.value);
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, requestId));
+    const [idempotencyCount] = await db
+      .select({ value: count() })
+      .from(idempotencyKeys)
+      .where(eq(idempotencyKeys.key, idempotencyKey));
+
+    expect(auditCount?.value).toBe(3);
+    expect(idempotencyCount?.value).toBe(1);
+  });
+
+  it("rejects duplicate decision keys with different payloads", async () => {
+    const { requestId, reviewer } = await createUnderReviewRequest();
+    const idempotencyKey = decisionKey("reject-conflict");
+    const firstReason = "Initial reviewer reason.";
+    const secondReason = "Changed reviewer reason.";
+
+    const first = await rejectRequest(reviewer, {
+      requestId,
+      idempotencyKey,
+      reason: firstReason
+    });
+    const second = await rejectRequest(reviewer, {
+      requestId,
+      idempotencyKey,
+      reason: secondReason
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.error.code).toBe("IdempotencyConflict");
+    }
+
+    const request = await getRequest(requestId);
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, requestId));
+
+    expect(request?.decisionNote).toBe(firstReason);
+    expect(auditCount?.value).toBe(3);
+  });
+
+  it("does not write a second decision audit event for a new duplicate decision", async () => {
     const { requestId, reviewer } = await createUnderReviewRequest();
 
-    const first = await approveRequest(reviewer, { requestId });
-    const second = await approveRequest(reviewer, { requestId });
+    const first = await approveRequest(reviewer, {
+      requestId,
+      idempotencyKey: decisionKey("first-approve")
+    });
+    const second = await approveRequest(reviewer, {
+      requestId,
+      idempotencyKey: decisionKey("second-approve")
+    });
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(false);
@@ -331,7 +412,8 @@ describe("review decisions", () => {
     const result = await approveRequest(
       reviewer,
       {
-        requestId: crypto.randomUUID()
+        requestId: crypto.randomUUID(),
+        idempotencyKey: decisionKey("dependency-approve")
       },
       {
         ...defaultDependencies,

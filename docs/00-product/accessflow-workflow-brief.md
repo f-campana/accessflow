@@ -9,8 +9,8 @@ The product scenario is intentionally small: requesters ask for access to a synt
 This document describes the product spine and roadmap. It is not a claim that every role and command is implemented today. The current implementation is intentionally narrower:
 
 ```text
-implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, reviewer startReview, approveRequest, rejectRequest, persisted audit timelines
-next hardening: reviewer decision review, decision idempotency decision, accessibility, docs, and quality gates
+implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, reviewer startReview, approveRequest, rejectRequest, reviewer decision idempotency, persisted audit timelines
+next hardening: decide whether startReview also needs retry/idempotency semantics before broadening reviewer UX
 roadmap later: withdrawRequest, revokeAccess, admin inspection
 ```
 
@@ -180,13 +180,13 @@ reviewer: list submitted/under-review/approved/rejected requests, read request d
 admin roadmap: inspect all requests and audit events, revoke approved access
 ```
 
-The current requester implementation covers create/update/submit/view-own-request behavior. The current reviewer implementation covers review reads, start review, approval, rejection, and decision notes. Request withdrawal, revocation, decision idempotency, and admin permissions remain roadmap.
+The current requester implementation covers create/update/submit/view-own-request behavior. The current reviewer implementation covers review reads, start review, approval, rejection, decision notes, and approve/reject idempotency. Request withdrawal, revocation, `startReview` idempotency, and admin permissions remain roadmap.
 
 Authorization should be enforced in the API command layer before state transitions are attempted.
 
 ## 8. Idempotency
 
-Submit and review transition commands should be idempotent when retries are exposed as a product requirement. Idempotency is scoped to the actor, idempotency key, command name, and payload hash. Today, `submitRequest` is implemented with idempotency. Review/admin transition idempotency is roadmap and should be decided before adding retry UX to reviewer actions.
+Submit and review transition commands should be idempotent when retries are exposed as a product requirement. Idempotency is scoped to the actor, idempotency key, command name, and payload hash. Today, `submitRequest`, `approveRequest`, and `rejectRequest` are implemented with idempotency. `startReview`, `withdrawRequest`, and `revokeAccess` idempotency remain explicit future decisions before adding retry UX to those actions.
 
 Rules:
 
@@ -197,7 +197,7 @@ same actor + same idempotency key + different command payload returns Idempotenc
 
 The idempotency record should be written in the same logical operation as the workflow transition result. If a command has already completed, retrying it should not create duplicate access requests, duplicate decisions, or duplicate audit events.
 
-Idempotency is required for commands that can be retried by clients after uncertain completion. Implemented today: `submitRequest`. Roadmap later: decide and implement idempotency for `startReview`, `approveRequest`, `rejectRequest`, `withdrawRequest`, and `revokeAccess` if those commands gain retry semantics. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
+Idempotency is required for commands that can be retried by clients after uncertain completion. Implemented today: `submitRequest`, `approveRequest`, and `rejectRequest`. Roadmap later: decide and implement idempotency for `startReview`, `withdrawRequest`, and `revokeAccess` if those commands gain retry semantics. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
 
 ## 9. Audit Guarantees
 

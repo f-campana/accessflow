@@ -27,6 +27,7 @@ Implemented API coverage:
   request inbox/detail projections.
 - Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
 - Reviewer/admin authorization for reviewer reads and review decisions.
+- Reviewer decision idempotency replay/conflict behavior for approve and reject retries.
 
 Implemented web coverage:
 
@@ -48,8 +49,8 @@ Current focus:
 Current implementation covers requester submission and reviewer decisions:
 
 ```text
-implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, requester final-state reads, persisted audit timelines
-next: review final-state behavior and decide whether decision idempotency is needed now
+implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, reviewer decision idempotency, requester final-state reads, persisted audit timelines
+next: review whether startReview also needs retry/idempotency semantics before broadening reviewer UX
 later roadmap: withdrawal/revocation, admin inspection, broader operational surfaces
 ```
 

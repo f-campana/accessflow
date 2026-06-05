@@ -58,7 +58,8 @@ Any workflow mutation must prove:
 5. database transaction
 6. persisted state change
 7. audit event written in the same transaction
-8. typed success or typed error response
+8. idempotency replay/conflict behavior when the command is retryable
+9. typed success or typed error response
 
 The central invariant remains:
 
@@ -102,9 +103,10 @@ For the reviewer path, verify:
 6. `approveRequest` moves the request to `approved`
 7. `rejectRequest` requires a reason and moves the request to `rejected`
 8. final approved/rejected states hide decision controls
-9. audit timeline shows persisted `submitRequest`, `startReview`, and decision events
-10. no browser console errors or warnings
-11. no horizontal overflow at phone width
+9. retryable approve/reject actions preserve one decision audit event per idempotency key
+10. audit timeline shows persisted `submitRequest`, `startReview`, and decision events
+11. no browser console errors or warnings
+12. no horizontal overflow at phone width
 
 The repeatable requester browser gate is:
 

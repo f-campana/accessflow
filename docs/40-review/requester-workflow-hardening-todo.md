@@ -614,6 +614,28 @@ Plain summary: small helpers that looked reusable but had no real second caller 
 
 Lesson: a helper earns its name when it hides real repeated behavior. If it only wraps one line or predicts a future use, it usually makes the current code harder to read.
 
+### 30. [x] Add Reviewer Decision Idempotency
+
+Issue: reviewer approval and rejection changed workflow state, but retries did not have a stable replay contract. If a reviewer clicked approve/reject and the response was lost after the database committed, a retry would use a fresh command attempt and could only fail from the final workflow state.
+
+Why it matters: this project is about truthful workflow transitions. Retryable decisions should not create duplicate audit events, and the UI should not lose the ability to ask the API what happened after an uncertain completion.
+
+Fix direction: require idempotency keys for `approveRequest` and `rejectRequest`, store pending/completed idempotency rows in the same command transaction, replay completed same-key/same-payload decisions, reject same-key/different-payload retries, and preserve reviewer decision keys in the web controller until refreshed state confirms the terminal decision.
+
+Done when:
+
+- duplicate same-key approve/reject retries replay the original result
+- same-key different-payload retries return `IdempotencyConflict`
+- new duplicate decisions after a terminal state do not write another audit event
+- the reviewer UI keeps the same key through uncertain mutation retries
+- docs state that reviewer decision idempotency is implemented
+
+Completed 2026-06-05: added approve/reject idempotency keys at the API validation boundary, reused the command idempotency replay helper for reviewer decisions, stored completed decision responses transactionally, and added command tests for replay, payload conflict, and no duplicate audit events. The reviewer web controller now creates stable approve/reject attempts, reuses the same key for uncertain retries, clears it after persisted state confirms the decision, and uses truthful copy for mutation failure versus refresh failure. Verification: `pnpm --filter @accessflow/api test`, `pnpm --filter @accessflow/web test`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `git diff --check`.
+
+Plain summary: reviewer approval and rejection can now be retried safely with the same key. A retry returns the original decision instead of writing another decision event.
+
+Lesson: idempotency is not just a database table. The API must record enough result data to replay, and the UI must preserve the same key until it has confirmed persisted state.
+
 ## Do Not Start Yet
 
 Requester hardening is substantially complete, and the first reviewer decision slice has been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:

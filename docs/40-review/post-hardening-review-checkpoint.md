@@ -122,3 +122,9 @@ Requester final-state visibility completed on 2026-06-05: requester reads now in
 Plain summary: a reviewer rejection no longer makes the request disappear for the requester. The requester can sign back in, see the final rejected state, read the reason, and confirm the durable audit events.
 
 Lesson: active workflow cardinality and requester-visible history are different concepts. A final rejected request should be visible to explain the decision, but it should not automatically block a future remediation path by being treated as active.
+
+Reviewer decision idempotency completed on 2026-06-05: `approveRequest` and `rejectRequest` now require client-provided idempotency keys, write pending/completed idempotency records inside the same command transaction, replay completed same-key/same-payload decisions, reject same-key/different-payload retries with `IdempotencyConflict`, and avoid duplicate decision audit events. The reviewer web controller keeps one decision key through uncertain retries and clears it only after refreshed persisted state confirms the terminal decision.
+
+Plain summary: if a reviewer approval or rejection is retried because the response was uncertain, the API can safely return the original decision instead of writing a second audit event.
+
+Lesson: idempotency only works when both sides participate. The API must store/replay the command result, and the UI must preserve the same key until persisted state confirms what happened.

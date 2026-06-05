@@ -18,6 +18,8 @@ const unauthenticatedContext = {
   res: {}
 } as RequestContext;
 
+const decisionKey = (name: string) => `${name}-${crypto.randomUUID()}`;
+
 const createSubmittedRequestForRouter = async (
   idempotencyKey: string
 ) => {
@@ -300,12 +302,19 @@ describe("tRPC auth boundary", () => {
     const started = await caller.startReview({
       requestId: submitted.requestId
     });
+    const approveIdempotencyKey = decisionKey("router-approve");
     const approved = await caller.approveRequest({
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: approveIdempotencyKey
+    });
+    const replayedApproval = await caller.approveRequest({
+      requestId: submitted.requestId,
+      idempotencyKey: approveIdempotencyKey
     });
 
     expect(started.ok).toBe(true);
     expect(approved.ok).toBe(true);
+    expect(replayedApproval).toEqual(approved);
 
     await expect(caller.reviewerInbox()).resolves.toEqual([
       expect.objectContaining({
@@ -383,6 +392,7 @@ describe("tRPC auth boundary", () => {
     });
     const rejected = await caller.rejectRequest({
       requestId: submitted.requestId,
+      idempotencyKey: decisionKey("router-reject"),
       reason
     });
 
@@ -491,7 +501,10 @@ describe("tRPC auth boundary", () => {
     });
 
     await expect(
-      caller.approveRequest({ requestId: submitted.requestId })
+      caller.approveRequest({
+        requestId: submitted.requestId,
+        idempotencyKey: decisionKey("requester-forbidden-approve")
+      })
     ).rejects.toMatchObject({
       code: "FORBIDDEN"
     } satisfies Partial<TRPCError>);
@@ -499,6 +512,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.rejectRequest({
         requestId: submitted.requestId,
+        idempotencyKey: decisionKey("requester-forbidden-reject"),
         reason: "Requester cannot reject their own request."
       })
     ).rejects.toMatchObject({
@@ -608,7 +622,10 @@ describe("tRPC auth boundary", () => {
     const caller = appRouter.createCaller(unauthenticatedContext);
 
     await expect(
-      caller.approveRequest({ requestId: crypto.randomUUID() })
+      caller.approveRequest({
+        requestId: crypto.randomUUID(),
+        idempotencyKey: decisionKey("unauthenticated-approve")
+      })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED"
     } satisfies Partial<TRPCError>);
@@ -616,6 +633,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.rejectRequest({
         requestId: crypto.randomUUID(),
+        idempotencyKey: decisionKey("unauthenticated-reject"),
         reason: "Unauthenticated users cannot reject requests."
       })
     ).rejects.toMatchObject({
