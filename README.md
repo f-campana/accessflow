@@ -19,31 +19,36 @@ Implemented API coverage:
 
 - Better Auth local email/password session path.
 - Drizzle/Postgres schema and migrations inside `apps/api`.
-- `createDraft`, `saveDraft`, and `submitRequest` command services.
+- `createDraft`, `saveDraft`, `submitRequest`, `startReview`,
+  `approveRequest`, and `rejectRequest` command services.
 - tRPC mutations for those commands.
 - tRPC reads for the current actor, study list, and requester study access state.
-- tRPC reviewer reads for submitted-request inbox/detail projections.
+- tRPC reviewer reads for submitted, under-review, approved, and rejected
+  request inbox/detail projections.
 - Requester ownership checks, typed command errors, idempotency replay, and audit writes for the submit transition.
-- Reviewer/admin read authorization for submitted request projections.
+- Reviewer/admin authorization for reviewer reads and review decisions.
 
 Implemented web coverage:
 
 - Real local sign-up/sign-in through the API auth path.
 - Study entry point backed by seeded Postgres data.
 - Draft creation, draft saving, submission, typed error rendering, persisted status, and audit timeline.
-- Reviewer read-only queue/detail view for submitted requests and persisted audit timeline.
+- Reviewer queue/detail view for submitted, under-review, approved, and rejected
+  requests, including start-review, approve, reject, decision note, and
+  persisted audit timeline.
 
 Current focus:
 
-- Keep requester and reviewer-read surfaces honest before adding reviewer workflow mutations.
-- Do not build reviewer approve/reject/start-review mutations until the read surface, authorization model, and tests are stable.
+- Keep requester and reviewer workflow surfaces honest while broadening coverage.
+- Do not add withdrawal, revocation, admin consoles, uploads, notifications, or
+  tenant/org modeling before the current workflow is reviewed.
 
-Current implementation stops at the requester workflow:
+Current implementation covers requester submission and reviewer decisions:
 
 ```text
-implemented: sign up/sign in, study read, draft create/save, submit, requester persisted audit timeline, reviewer submitted-request inbox/detail reads
-next: harden reviewer reads and design reviewer mutations deliberately
-later roadmap: review decisions, withdrawal/revocation, admin inspection, broader operational surfaces
+implemented: sign up/sign in, study read, draft create/save, submit, reviewer start/approve/reject, persisted audit timelines
+next: review the reviewer decision slice and decide whether decision idempotency is needed now
+later roadmap: withdrawal/revocation, admin inspection, broader operational surfaces
 ```
 
 ## Read First
@@ -133,7 +138,7 @@ That command starts Postgres, applies API migrations, seeds the synthetic study 
 0 stale generated studies
 ```
 
-For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, readable auth errors, and no horizontal overflow at phone width.
+For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, reviewer start-review, reviewer approve/reject, readable auth errors, and no horizontal overflow at phone width.
 
 For repeatable requester workflow browser coverage, install the Playwright browser once:
 
@@ -147,7 +152,7 @@ Then run:
 pnpm test:e2e
 ```
 
-This starts the local Postgres/API/web stack through Playwright from the same clean demo baseline and exercises the requester path and reviewer read path at phone width.
+This starts the local Postgres/API/web stack through Playwright from the same clean demo baseline and exercises the requester path plus reviewer read/start/approve/reject paths at phone width.
 
 ## Verification
 
@@ -165,9 +170,7 @@ The API test runner uses an isolated `accessflow_test` database by default so ve
 
 See `docs/30-quality/repo-quality-gate.md` for the full pass-closing standard.
 
-See `docs/40-review/requester-workflow-hardening-todo.md` for the completed requester hardening backlog and `docs/40-review/post-hardening-review-checkpoint.md` for the reviewer-read start recommendation.
-
-Reviewer workflow mutations are deliberately roadmap-only until reviewer read authorization/projections are stable.
+See `docs/40-review/requester-workflow-hardening-todo.md` for the completed requester hardening backlog and `docs/40-review/post-hardening-review-checkpoint.md` for the reviewer workflow progression notes.
 
 ## Boundaries
 

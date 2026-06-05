@@ -52,7 +52,12 @@ export const parsePersistedRequestedStudyRole = (
   return parsed;
 };
 
-export const workflowEventTypes = ["submitRequest"] as const;
+export const workflowEventTypes = [
+  "submitRequest",
+  "startReview",
+  "approveRequest",
+  "rejectRequest"
+] as const;
 
 export type WorkflowEventType = (typeof workflowEventTypes)[number];
 
@@ -71,6 +76,21 @@ export const workflowTransitions = [
     eventType: "submitRequest",
     from: "draft",
     to: "submitted"
+  },
+  {
+    eventType: "startReview",
+    from: "submitted",
+    to: "under_review"
+  },
+  {
+    eventType: "approveRequest",
+    from: "under_review",
+    to: "approved"
+  },
+  {
+    eventType: "rejectRequest",
+    from: "under_review",
+    to: "rejected"
   }
 ] as const satisfies readonly WorkflowTransition[];
 

@@ -18,6 +18,34 @@ const unauthenticatedContext = {
   res: {}
 } as RequestContext;
 
+const createSubmittedRequestForRouter = async (
+  idempotencyKey: string
+) => {
+  const requester = await createTestActor("requester");
+  const study = await createTestStudy();
+  const created = await createDraft(requester, { studyId: study.id });
+
+  if (!created.ok) {
+    throw new Error(created.error.message);
+  }
+
+  const submitted = await submitRequest(requester, {
+    draftId: created.value.draftId,
+    idempotencyKey,
+    ...validSubmission
+  });
+
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  return {
+    requester,
+    study,
+    requestId: submitted.value.requestId
+  };
+};
+
 describe("tRPC auth boundary", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -197,6 +225,233 @@ describe("tRPC auth boundary", () => {
     );
   });
 
+  it("lets reviewer users start review and keep the request visible", async () => {
+    const requester = await createTestActor("requester");
+    const reviewer = await createTestActor("reviewer");
+    const study = await createTestStudy();
+    const created = await createDraft(requester, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const submitted = await submitRequest(requester, {
+      draftId: created.value.draftId,
+      idempotencyKey: "reviewer-router-start-1",
+      ...validSubmission
+    });
+
+    if (!submitted.ok) {
+      throw new Error(submitted.error.message);
+    }
+
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: reviewer
+    });
+
+    const started = await caller.startReview({
+      requestId: submitted.value.requestId
+    });
+
+    expect(started.ok).toBe(true);
+
+    await expect(caller.reviewerInbox()).resolves.toEqual([
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.value.requestId,
+          status: "under_review"
+        })
+      })
+    ]);
+
+    await expect(
+      caller.reviewerStudyAccessDetail({ requestId: submitted.value.requestId })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.value.requestId,
+          status: "under_review"
+        }),
+        auditEvents: [
+          expect.objectContaining({
+            eventType: "submitRequest"
+          }),
+          expect.objectContaining({
+            eventType: "startReview",
+            fromStatus: "submitted",
+            toStatus: "under_review"
+          })
+        ]
+      })
+    );
+  });
+
+  it("lets reviewer users approve under-review requests and keep final detail visible", async () => {
+    const reviewer = await createTestActor("reviewer");
+    const submitted = await createSubmittedRequestForRouter(
+      "reviewer-router-approve-1"
+    );
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: reviewer
+    });
+
+    const started = await caller.startReview({
+      requestId: submitted.requestId
+    });
+    const approved = await caller.approveRequest({
+      requestId: submitted.requestId
+    });
+
+    expect(started.ok).toBe(true);
+    expect(approved.ok).toBe(true);
+
+    await expect(caller.reviewerInbox()).resolves.toEqual([
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "approved",
+          decisionNote: null
+        })
+      })
+    ]);
+
+    await expect(
+      caller.reviewerStudyAccessDetail({ requestId: submitted.requestId })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "approved",
+          decisionNote: null
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({ eventType: "startReview" }),
+          expect.objectContaining({
+            eventType: "approveRequest",
+            fromStatus: "under_review",
+            toStatus: "approved",
+            note: null
+          })
+        ]
+      })
+    );
+  });
+
+  it("lets reviewer users reject under-review requests with a durable note", async () => {
+    const reviewer = await createTestActor("reviewer");
+    const submitted = await createSubmittedRequestForRouter(
+      "reviewer-router-reject-1"
+    );
+    const reason = "Requester needs a narrower access purpose.";
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: reviewer
+    });
+
+    const started = await caller.startReview({
+      requestId: submitted.requestId
+    });
+    const rejected = await caller.rejectRequest({
+      requestId: submitted.requestId,
+      reason
+    });
+
+    expect(started.ok).toBe(true);
+    expect(rejected.ok).toBe(true);
+
+    await expect(caller.reviewerInbox()).resolves.toEqual([
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "rejected",
+          decisionNote: reason
+        })
+      })
+    ]);
+
+    await expect(
+      caller.reviewerStudyAccessDetail({ requestId: submitted.requestId })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          id: submitted.requestId,
+          status: "rejected",
+          decisionNote: reason
+        }),
+        auditEvents: [
+          expect.objectContaining({ eventType: "submitRequest" }),
+          expect.objectContaining({ eventType: "startReview" }),
+          expect.objectContaining({
+            eventType: "rejectRequest",
+            fromStatus: "under_review",
+            toStatus: "rejected",
+            note: reason
+          })
+        ]
+      })
+    );
+  });
+
+  it("forbids requester users from starting review through tRPC", async () => {
+    const requester = await createTestActor("requester");
+    const study = await createTestStudy();
+    const created = await createDraft(requester, { studyId: study.id });
+
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const submitted = await submitRequest(requester, {
+      draftId: created.value.draftId,
+      idempotencyKey: "requester-router-start-forbidden-1",
+      ...validSubmission
+    });
+
+    if (!submitted.ok) {
+      throw new Error(submitted.error.message);
+    }
+
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: requester
+    });
+
+    await expect(
+      caller.startReview({ requestId: submitted.value.requestId })
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("forbids requester users from deciding requests through tRPC", async () => {
+    const requester = await createTestActor("requester");
+    const submitted = await createSubmittedRequestForRouter(
+      "requester-router-decision-forbidden-1"
+    );
+    const caller = appRouter.createCaller({
+      ...unauthenticatedContext,
+      actor: requester
+    });
+
+    await expect(
+      caller.approveRequest({ requestId: submitted.requestId })
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    } satisfies Partial<TRPCError>);
+
+    await expect(
+      caller.rejectRequest({
+        requestId: submitted.requestId,
+        reason: "Requester cannot reject their own request."
+      })
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    } satisfies Partial<TRPCError>);
+  });
+
   it("lets admin users read reviewer projections", async () => {
     const requester = await createTestActor("requester");
     const admin = await createTestActor("admin");
@@ -279,6 +534,35 @@ describe("tRPC auth boundary", () => {
       caller.submitRequest({
         draftId: crypto.randomUUID(),
         idempotencyKey: "unauthenticated-submit"
+      })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("requires auth for startReview", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(
+      caller.startReview({ requestId: crypto.randomUUID() })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("requires auth for reviewer decision commands", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext);
+
+    await expect(
+      caller.approveRequest({ requestId: crypto.randomUUID() })
+    ).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    } satisfies Partial<TRPCError>);
+
+    await expect(
+      caller.rejectRequest({
+        requestId: crypto.randomUUID(),
+        reason: "Unauthenticated users cannot reject requests."
       })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED"

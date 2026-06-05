@@ -16,3 +16,13 @@ export const ensureRequester = (
         ok: false,
         error: forbidden("Only requesters can manage access request drafts")
       };
+
+export const ensureReviewer = (
+  actor: AuthenticatedActor
+): Result<true, AppError> =>
+  actor.role === "reviewer" || actor.role === "admin"
+    ? ok(true)
+    : {
+        ok: false,
+        error: forbidden("Reviewer access required")
+      };

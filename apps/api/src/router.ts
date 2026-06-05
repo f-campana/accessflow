@@ -1,7 +1,10 @@
 import { toCommandResponse } from "@accessflow/core";
 import {
+  approveRequest,
   createDraft,
+  rejectRequest,
   saveDraft,
+  startReview,
   submitRequest
 } from "./commands/study-access";
 import {
@@ -44,7 +47,22 @@ export const appRouter = router({
   ),
   submitRequest: authenticatedCommandProcedure.mutation(async ({ ctx, input }) =>
     toCommandResponse(await submitRequest(ctx.actor, input))
-  )
+  ),
+  startReview: reviewerProcedure
+    .input(z.unknown())
+    .mutation(async ({ ctx, input }) =>
+      toCommandResponse(await startReview(ctx.actor, input))
+    ),
+  approveRequest: reviewerProcedure
+    .input(z.unknown())
+    .mutation(async ({ ctx, input }) =>
+      toCommandResponse(await approveRequest(ctx.actor, input))
+    ),
+  rejectRequest: reviewerProcedure
+    .input(z.unknown())
+    .mutation(async ({ ctx, input }) =>
+      toCommandResponse(await rejectRequest(ctx.actor, input))
+    )
 });
 
 export type AppRouter = typeof appRouter;

@@ -27,6 +27,18 @@ export type StudySummary = {
   sensitivityLabel: string;
 };
 
+type ReviewerVisibleStatus = Extract<
+  StudyAccessRequestStatus,
+  "submitted" | "under_review" | "approved" | "rejected"
+>;
+
+const reviewerVisibleStatuses = [
+  "submitted",
+  "under_review",
+  "approved",
+  "rejected"
+] as const satisfies readonly ReviewerVisibleStatus[];
+
 export type RequesterStudyAccess = {
   request: {
     id: string;
@@ -60,9 +72,11 @@ export type RequesterStudyAccess = {
 export type ReviewerInboxItem = {
   request: {
     id: string;
-    status: "submitted";
+    status: ReviewerVisibleStatus;
     requestedRole: RequestedStudyRole;
     submittedAt: string;
+    decidedAt: string | null;
+    decisionNote: string | null;
     updatedAt: string;
   };
   requester: {
@@ -80,9 +94,11 @@ export type ReviewerInboxItem = {
 export type ReviewerStudyAccessDetail = {
   request: {
     id: string;
-    status: "submitted";
+    status: ReviewerVisibleStatus;
     requestedRole: RequestedStudyRole;
     submittedAt: string;
+    decidedAt: string | null;
+    decisionNote: string | null;
     updatedAt: string;
   };
   requester: {
@@ -227,10 +243,28 @@ const parseSubmittedRequestedRole = (value: string | null): RequestedStudyRole =
   return requestedRole;
 };
 
-const reviewerSubmittedRequestWhere = (requestId?: string) =>
+const parseReviewerVisibleStatus = (
+  value: StudyAccessRequestStatus
+): ReviewerVisibleStatus => {
+  if (
+    value === "submitted" ||
+    value === "under_review" ||
+    value === "approved" ||
+    value === "rejected"
+  ) {
+    return value;
+  }
+
+  throw new Error("Reviewer projection received an unsupported request status");
+};
+
+const reviewerVisibleRequestWhere = (requestId?: string) =>
   requestId
-    ? and(eq(studyAccessRequests.id, requestId), eq(studyAccessRequests.status, "submitted"))
-    : eq(studyAccessRequests.status, "submitted");
+    ? and(
+        eq(studyAccessRequests.id, requestId),
+        inArray(studyAccessRequests.status, reviewerVisibleStatuses)
+      )
+    : inArray(studyAccessRequests.status, reviewerVisibleStatuses);
 
 export const listReviewerStudyAccessRequests = async (): Promise<
   ReviewerInboxItem[]
@@ -241,6 +275,8 @@ export const listReviewerStudyAccessRequests = async (): Promise<
       status: studyAccessRequests.status,
       requestedRole: studyAccessRequests.requestedRole,
       submittedAt: studyAccessRequests.submittedAt,
+      decidedAt: studyAccessRequests.decidedAt,
+      decisionNote: studyAccessRequests.decisionNote,
       requestUpdatedAt: studyAccessRequests.updatedAt,
       requesterId: users.id,
       requesterEmail: users.email,
@@ -260,7 +296,7 @@ export const listReviewerStudyAccessRequests = async (): Promise<
       studyAccessRequestDrafts,
       eq(studyAccessRequestDrafts.requestId, studyAccessRequests.id)
     )
-    .where(reviewerSubmittedRequestWhere())
+    .where(reviewerVisibleRequestWhere())
     .orderBy(
       asc(studyAccessRequests.submittedAt),
       asc(studyAccessRequests.id)
@@ -269,9 +305,11 @@ export const listReviewerStudyAccessRequests = async (): Promise<
   return rows.map((row) => ({
     request: {
       id: row.requestId,
-      status: "submitted",
+      status: parseReviewerVisibleStatus(row.status),
       requestedRole: parseSubmittedRequestedRole(row.requestedRole),
       submittedAt: row.submittedAt?.toISOString() ?? "",
+      decidedAt: toIso(row.decidedAt),
+      decisionNote: row.decisionNote,
       updatedAt: row.requestUpdatedAt.toISOString()
     },
     requester: {
@@ -304,6 +342,8 @@ export const getReviewerStudyAccessDetail = async (
       status: studyAccessRequests.status,
       requestedRole: studyAccessRequests.requestedRole,
       submittedAt: studyAccessRequests.submittedAt,
+      decidedAt: studyAccessRequests.decidedAt,
+      decisionNote: studyAccessRequests.decisionNote,
       requestUpdatedAt: studyAccessRequests.updatedAt,
       requesterId: users.id,
       requesterEmail: users.email,
@@ -317,7 +357,7 @@ export const getReviewerStudyAccessDetail = async (
     .from(studyAccessRequests)
     .innerJoin(users, eq(users.id, studyAccessRequests.requesterId))
     .innerJoin(studies, eq(studies.id, studyAccessRequests.studyId))
-    .where(reviewerSubmittedRequestWhere(requestId))
+    .where(reviewerVisibleRequestWhere(requestId))
     .limit(1);
 
   if (!row) {
@@ -357,9 +397,11 @@ export const getReviewerStudyAccessDetail = async (
   return {
     request: {
       id: row.requestId,
-      status: "submitted",
+      status: parseReviewerVisibleStatus(row.status),
       requestedRole: parseSubmittedRequestedRole(row.requestedRole),
       submittedAt: row.submittedAt?.toISOString() ?? "",
+      decidedAt: toIso(row.decidedAt),
+      decisionNote: row.decisionNote,
       updatedAt: row.requestUpdatedAt.toISOString()
     },
     requester: {

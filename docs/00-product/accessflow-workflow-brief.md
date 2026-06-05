@@ -9,9 +9,9 @@ The product scenario is intentionally small: requesters ask for access to a synt
 This document describes the product spine and roadmap. It is not a claim that every role and command is implemented today. The current implementation is intentionally narrower:
 
 ```text
-implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, submit audit timeline, reviewer inbox/detail reads
-next hardening: reviewer read stability, accessibility, docs, and quality gates
-roadmap later: startReview, approveRequest, rejectRequest, withdrawRequest, revokeAccess, admin inspection
+implemented now: requester sign-up/sign-in, study read, createDraft, saveDraft, submitRequest, reviewer startReview, approveRequest, rejectRequest, persisted audit timelines
+next hardening: reviewer decision review, decision idempotency decision, accessibility, docs, and quality gates
+roadmap later: withdrawRequest, revokeAccess, admin inspection
 ```
 
 The core command path is:
@@ -42,11 +42,11 @@ Conform is deferred. Forms in v1 use plain React and HTML controls with Zod vali
 
 ## 3. Personas
 
-The target product has three roles. The current code implements the requester-facing command slice and the reviewer read-only slice.
+The target product has three roles. The current code implements the requester-facing command slice and the first reviewer decision slice.
 
 Requester: implemented for creating and updating their own access request drafts, submitting requests, and viewing the status and audit timeline for their own requests. Withdrawing a submitted request is roadmap.
 
-Reviewer: implemented for reading submitted access requests through reviewer inbox/detail projections and viewing the persisted audit timeline. Starting review, approval, rejection, and decision notes are roadmap. A reviewer should not be able to edit the requester-owned form payload directly.
+Reviewer: implemented for reading submitted, under-review, approved, and rejected access requests through reviewer inbox/detail projections, starting review, approving requests, rejecting requests with a reason, and viewing the persisted audit timeline. A reviewer should not be able to edit the requester-owned form payload directly.
 
 Admin: roadmap. Admin will inspect all requests and audit events. Admin exists for operational visibility and test coverage, not for a large management console in v1.
 
@@ -62,11 +62,11 @@ Target workflow statuses:
 implemented now:
 draft
 submitted
-
-roadmap later:
 under_review
 approved
 rejected
+
+roadmap later:
 withdrawn
 revoked
 ```
@@ -76,12 +76,12 @@ Target transitions:
 ```text
 implemented now:
 draft -> submitted
-
-roadmap later:
 submitted -> under_review
-submitted -> withdrawn
 under_review -> approved
 under_review -> rejected
+
+roadmap later:
+submitted -> withdrawn
 rejected -> draft
 approved -> revoked
 ```
@@ -100,21 +100,21 @@ Implemented command set:
 createDraft
 saveDraft
 submitRequest
+startReview
+approveRequest
+rejectRequest
 ```
 
 Roadmap command set:
 
 ```text
-startReview
-approveRequest
-rejectRequest
 withdrawRequest
 revokeAccess
 ```
 
 `createDraft` creates a requester-owned draft for a study workspace. `saveDraft` updates draft fields without submitting the workflow. `submitRequest` validates the request payload, moves the request from `draft` to `submitted`, records idempotency, and writes an audit event.
 
-`startReview` marks a submitted request as `under_review`. `approveRequest` and `rejectRequest` decide an under-review request. Rejection requires a reason. Approval may include a note but should not require one in v1.
+`startReview` marks a submitted request as `under_review`. `approveRequest` and `rejectRequest` decide an under-review request. Rejection requires a reason. Approval does not require a note in v1.
 
 `withdrawRequest` lets a requester withdraw a submitted request before review is complete. `revokeAccess` lets an admin or authorized reviewer revoke a previously approved request.
 
@@ -176,18 +176,17 @@ Initial authorization rules:
 
 ```text
 requester: create drafts, update own drafts, submit own requests, view own requests, withdraw own submitted requests
-reviewer: list submitted requests and read submitted request detail/timeline
-reviewer roadmap: start review, approve under-review requests, reject under-review requests
+reviewer: list submitted/under-review/approved/rejected requests, read request detail/timeline, start review, approve under-review requests, reject under-review requests
 admin roadmap: inspect all requests and audit events, revoke approved access
 ```
 
-The current requester implementation covers create/update/submit/view-own-request behavior. The current reviewer implementation covers read-only submitted-request projections. Request withdrawal, reviewer mutations, and admin permissions remain roadmap.
+The current requester implementation covers create/update/submit/view-own-request behavior. The current reviewer implementation covers review reads, start review, approval, rejection, and decision notes. Request withdrawal, revocation, decision idempotency, and admin permissions remain roadmap.
 
 Authorization should be enforced in the API command layer before state transitions are attempted.
 
 ## 8. Idempotency
 
-Submit and review transition commands are idempotent. Idempotency is scoped to the actor, idempotency key, command name, and payload hash. Today, `submitRequest` is implemented with idempotency. Review/admin transition idempotency is roadmap.
+Submit and review transition commands should be idempotent when retries are exposed as a product requirement. Idempotency is scoped to the actor, idempotency key, command name, and payload hash. Today, `submitRequest` is implemented with idempotency. Review/admin transition idempotency is roadmap and should be decided before adding retry UX to reviewer actions.
 
 Rules:
 
@@ -198,7 +197,7 @@ same actor + same idempotency key + different command payload returns Idempotenc
 
 The idempotency record should be written in the same logical operation as the workflow transition result. If a command has already completed, retrying it should not create duplicate access requests, duplicate decisions, or duplicate audit events.
 
-Idempotency is required for commands that create durable effects. Implemented today: `submitRequest`. Roadmap later: `startReview`, `approveRequest`, `rejectRequest`, `withdrawRequest`, and `revokeAccess`. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
+Idempotency is required for commands that can be retried by clients after uncertain completion. Implemented today: `submitRequest`. Roadmap later: decide and implement idempotency for `startReview`, `approveRequest`, `rejectRequest`, `withdrawRequest`, and `revokeAccess` if those commands gain retry semantics. Draft-saving may be last-write-wins in v1, but it should still use normal authorization and validation.
 
 ## 9. Audit Guarantees
 
@@ -309,13 +308,14 @@ same idempotency key and different payload returns IdempotencyConflict
 submit transition writes status update and audit event transactionally
 requester cannot access reviewer reads
 reviewer/admin can read submitted request projections
-
-roadmap later:
 requester cannot review own request
 reviewer can start review and approve/reject
 reject requires reason
 invalid transition returns InvalidTransition
 review/admin transitions write status update and audit event transactionally
+
+roadmap later:
+decision idempotency if reviewer retry UX is added
 ```
 
 Web tests:

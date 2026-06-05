@@ -70,14 +70,37 @@ describe("study access workflow transitions", () => {
         to: "submitted"
       }
     ]);
-    expect(allowedWorkflowTransitionsFrom("submitted")).toEqual([]);
+    expect(allowedWorkflowTransitionsFrom("submitted")).toEqual([
+      {
+        eventType: "startReview",
+        from: "submitted",
+        to: "under_review"
+      }
+    ]);
+    expect(allowedWorkflowTransitionsFrom("under_review")).toEqual([
+      {
+        eventType: "approveRequest",
+        from: "under_review",
+        to: "approved"
+      },
+      {
+        eventType: "rejectRequest",
+        from: "under_review",
+        to: "rejected"
+      }
+    ]);
   });
 
   it("keeps configured transitions aligned with status and event vocabularies", () => {
     const statuses = new Set<string>(studyAccessRequestStatuses);
     const events = new Set<string>(workflowEventTypes);
 
-    expect(workflowEventTypes).toEqual(["submitRequest"]);
+    expect(workflowEventTypes).toEqual([
+      "submitRequest",
+      "startReview",
+      "approveRequest",
+      "rejectRequest"
+    ]);
     for (const transition of workflowTransitions) {
       expect(events.has(transition.eventType)).toBe(true);
       expect(statuses.has(transition.from)).toBe(true);

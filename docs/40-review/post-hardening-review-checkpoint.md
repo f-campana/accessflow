@@ -8,7 +8,7 @@ Scope: review the current requester baseline before starting reviewer workflow w
 
 The requester baseline is in a good state for the next product slice. The API command path now has real session checks, role/ownership authorization, server validation, Drizzle transactions, idempotency replay behavior, persisted state, and audit writes. The web path no longer pretends local UI actions are durable; the requester flow renders state from the API and has mobile e2e coverage.
 
-Recommendation: Go for reviewer read workflow, but do not start reviewer mutations until the reviewer authorization/projection model is explicit and covered by tests.
+Historical recommendation at this checkpoint: go for reviewer read workflow, but do not start reviewer mutations until the reviewer authorization/projection model is explicit and covered by tests. That gate was satisfied before the 2026-06-05 reviewer decision pass.
 
 ## Findings
 
@@ -85,7 +85,7 @@ Priority: P3 guardrail.
 
 Go: start the reviewer read workflow after fixing the XState documentation drift or including that doc fix as the first step of the reviewer pass.
 
-No-Go: do not start reviewer approve/reject mutations until reviewer authorization, command errors, transition events, audit writes, and idempotency behavior are designed and tested with the same rigor as requester submit.
+Historical No-Go: do not start reviewer approve/reject mutations until reviewer authorization, command errors, transition events, audit writes, and retry/idempotency behavior are explicitly designed or deferred. The 2026-06-05 reviewer decision pass satisfied the authorization, command-error, transition, and audit-write parts; decision idempotency remains intentionally deferred until reviewer retry UX exists.
 
 ## Next Recommended Pass
 
@@ -99,7 +99,7 @@ Non-goals: no approve/reject mutations, no admin console, no documents, no notif
 
 Reviewer read workflow start completed on 2026-06-04: product/agent docs now describe the typed transition table instead of XState as the active workflow model; `apps/api` exposes reviewer-only inbox/detail read projections; requester users are forbidden from reviewer reads while reviewer/admin users can inspect submitted requests; `apps/web` has a separate `/reviewer` read-only workspace that does not branch inside the requester controller; Playwright covers requester submit plus reviewer submitted-request inspection without approve/reject controls.
 
-Plain summary: reviewers can now see submitted requests and the persisted audit timeline, but they still cannot change workflow state.
+Plain summary at this point in the project: reviewers could see submitted requests and the persisted audit timeline, but they could not yet change workflow state.
 
 Lesson: read surfaces and mutation surfaces should be split. Reviewer reads prove authorization and projection shape first; approve/reject should come later as a separate transactional command pass.
 
@@ -110,3 +110,9 @@ Plain summary: local testing no longer depends on random generated emails. Use `
 Clean demo reset added on 2026-06-04: `pnpm demo:reset`, `pnpm mobile:preview`, and the Playwright e2e server startup now reset the guarded local preview database before seeding. The intended human-test baseline is one synthetic study, three demo users, no existing access requests, and an empty reviewer queue until the current test creates a submitted request.
 
 Plain summary: phone testing should no longer inherit stale generated studies or old submitted requests from previous sessions.
+
+Reviewer decision workflow completed on 2026-06-05: `apps/api` now exposes reviewer-only `startReview`, `approveRequest`, and `rejectRequest` commands; the workflow transition table and database constraints cover `submitted -> under_review`, `under_review -> approved`, and `under_review -> rejected`; rejection requires a reason; each reviewer transition persists the request state and audit event in one transaction; and `/reviewer` refreshes from persisted API state after each command. Playwright covers requester submit plus reviewer reject and approve paths at phone width, and Browser-rendered mobile verification covered both terminal decision states with no console warnings and no horizontal overflow.
+
+Plain summary: reviewers can now move a submitted request into review, then approve or reject it. The UI only shows decision controls while the request is under review, and the audit timeline is still rendered from real database events.
+
+Lesson: a reviewer action should disappear only because the server returned a new persisted workflow state, not because the client hid it locally. Decision idempotency is still a separate future decision before adding retry-specific reviewer UX.

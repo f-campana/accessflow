@@ -18,6 +18,12 @@ export const reviewerOperationStatus = (operation: ReviewerOperation) => {
       return "Loading reviewer queue";
     case "loadingDetail":
       return "Loading request detail";
+    case "startingReview":
+      return "Starting review";
+    case "approvingRequest":
+      return "Approving request";
+    case "rejectingRequest":
+      return "Rejecting request";
     case "signingIn":
       return "Signing in";
     case "signingOut":
@@ -31,5 +37,8 @@ export type ReviewerOperation =
   | "idle"
   | "loadingWorkspace"
   | "loadingDetail"
+  | "startingReview"
+  | "approvingRequest"
+  | "rejectingRequest"
   | "signingIn"
   | "signingOut";

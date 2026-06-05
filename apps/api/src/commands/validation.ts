@@ -61,6 +61,23 @@ export const submitRequestInputSchema = draftFieldsSchema.extend({
   idempotencyKey: z.string().trim().min(8).max(128)
 });
 
+export const startReviewInputSchema = z.object({
+  requestId: z.uuid()
+});
+
+export const approveRequestInputSchema = z.object({
+  requestId: z.uuid()
+});
+
+export const rejectRequestInputSchema = z.object({
+  requestId: z.uuid(),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Rejection reason is required")
+    .max(1_000, "Rejection reason must be 1000 characters or less")
+});
+
 export const finalDraftFieldsSchema = z.object({
   purpose: requiredSubmissionText("Purpose", 1_000),
   requestedRole: requestedStudyRoleInputSchema,
@@ -73,8 +90,14 @@ export type DraftFields = z.infer<typeof draftFieldsSchema>;
 export type CreateDraftInput = z.infer<typeof createDraftInputSchema>;
 export type SaveDraftInput = z.infer<typeof saveDraftInputSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestInputSchema>;
+export type StartReviewInput = z.infer<typeof startReviewInputSchema>;
+export type ApproveRequestInput = z.infer<typeof approveRequestInputSchema>;
+export type RejectRequestInput = z.infer<typeof rejectRequestInputSchema>;
 export type FinalDraftFields = z.infer<typeof finalDraftFieldsSchema>;
 export type DraftFieldName = keyof DraftFields;
 export type CreateDraftInputFieldName = keyof CreateDraftInput;
 export type SaveDraftInputFieldName = keyof SaveDraftInput;
 export type SubmitRequestInputFieldName = keyof SubmitRequestInput;
+export type StartReviewInputFieldName = keyof StartReviewInput;
+export type ApproveRequestInputFieldName = keyof ApproveRequestInput;
+export type RejectRequestInputFieldName = keyof RejectRequestInput;

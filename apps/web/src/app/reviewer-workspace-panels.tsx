@@ -120,7 +120,7 @@ export function ReviewerInboxPanel({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Reviewer inbox</p>
-          <h2 id="reviewer-inbox-title">Submitted requests</h2>
+          <h2 id="reviewer-inbox-title">Requests for review</h2>
         </div>
         <span className="muted">
           {inbox.length} request{inbox.length === 1 ? "" : "s"}
@@ -128,7 +128,7 @@ export function ReviewerInboxPanel({
       </div>
 
       {inbox.length === 0 ? (
-        <p className="empty-state">No submitted requests are waiting for review.</p>
+        <p className="empty-state">No requests are waiting for review.</p>
       ) : (
         <ol className="reviewer-list">
           {inbox.map((item) => (
@@ -154,7 +154,9 @@ export function ReviewerInboxPanel({
                   <strong>{item.study.displayName}</strong>
                   <span>{item.requester.email}</span>
                 </span>
-                <span className="status-badge status-submitted">submitted</span>
+                <span className={`status-badge status-${item.request.status}`}>
+                  {item.request.status}
+                </span>
               </button>
             </li>
           ))}
@@ -165,10 +167,24 @@ export function ReviewerInboxPanel({
 }
 
 type ReviewerDetailPanelProps = {
+  busy: boolean;
   detail: ReviewerStudyAccessDetail;
+  rejectionReason: string;
+  onApproveRequest: () => void;
+  onRejectRequest: () => void;
+  onRejectionReasonChange: (value: string) => void;
+  onStartReview: () => void;
 };
 
-export function ReviewerDetailPanel({ detail }: ReviewerDetailPanelProps) {
+export function ReviewerDetailPanel({
+  busy,
+  detail,
+  rejectionReason,
+  onApproveRequest,
+  onRejectRequest,
+  onRejectionReasonChange,
+  onStartReview
+}: ReviewerDetailPanelProps) {
   return (
     <section className="panel reviewer-detail" aria-labelledby="reviewer-detail-title">
       <div className="section-heading">
@@ -221,10 +237,89 @@ export function ReviewerDetailPanel({ detail }: ReviewerDetailPanelProps) {
               <dt>Supporting notes</dt>
               <dd>{detail.draft?.supportingNotes ?? "Not provided"}</dd>
             </div>
+            {detail.request.decisionNote ? (
+              <div>
+                <dt>Decision note</dt>
+                <dd>{detail.request.decisionNote}</dd>
+              </div>
+            ) : null}
           </dl>
 
           <div className="submitted-note">
             Submitted at {detail.request.submittedAt}
+          </div>
+
+          <div className="reviewer-actions" aria-label="Reviewer actions">
+            {detail.request.status === "submitted" ? (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onStartReview}
+                disabled={busy}
+              >
+                Start review
+              </button>
+            ) : null}
+
+            {detail.request.status === "under_review" ? (
+              <>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={onApproveRequest}
+                  disabled={busy}
+                >
+                  Approve request
+                </button>
+                <label className="decision-note-field">
+                  Rejection reason
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(event) =>
+                      onRejectionReasonChange(event.target.value)
+                    }
+                    disabled={busy}
+                    rows={4}
+                    maxLength={1000}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={onRejectRequest}
+                  disabled={busy}
+                >
+                  Reject request
+                </button>
+              </>
+            ) : null}
+
+            {detail.request.status === "approved" ? (
+              <p className="empty-state">
+                Request approved
+                {detail.request.decidedAt
+                  ? ` at ${detail.request.decidedAt}.`
+                  : "."}
+              </p>
+            ) : null}
+
+            {detail.request.status === "rejected" ? (
+              <p className="empty-state">
+                Request rejected
+                {detail.request.decidedAt
+                  ? ` at ${detail.request.decidedAt}.`
+                  : "."}
+              </p>
+            ) : null}
+
+            {detail.request.status !== "submitted" &&
+            detail.request.status !== "under_review" &&
+            detail.request.status !== "approved" &&
+            detail.request.status !== "rejected" ? (
+              <p className="empty-state">No reviewer action is available.</p>
+            ) : (
+              null
+            )}
           </div>
         </div>
       )}

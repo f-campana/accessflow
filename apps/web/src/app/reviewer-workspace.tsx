@@ -58,7 +58,15 @@ export function ReviewerWorkspace() {
             selectedRequestId={controller.selectedRequestId}
             onSelectRequest={(requestId) => void actions.loadDetail(requestId)}
           />
-          <ReviewerDetailPanel detail={controller.detail} />
+          <ReviewerDetailPanel
+            busy={controller.operationActive}
+            detail={controller.detail}
+            rejectionReason={controller.rejectionReason}
+            onApproveRequest={() => void actions.approveRequest()}
+            onRejectRequest={() => void actions.rejectRequest()}
+            onRejectionReasonChange={actions.setRejectionReason}
+            onStartReview={() => void actions.startReview()}
+          />
           <ReviewerTimelinePanel detail={controller.detail} />
         </div>
       )}

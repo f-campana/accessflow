@@ -131,6 +131,7 @@ label {
 .reviewer-list-button,
 .reviewer-list-button > span,
 .reviewer-detail-grid,
+.reviewer-actions,
 .field-list,
 .field-list > *,
 .field-list dd {
@@ -370,6 +371,24 @@ label {
   color: #66736d;
 }
 
+.danger-button {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.danger-button:hover:not(:disabled) {
+  border-color: #7f2e2e;
+  background: #7f2e2e;
+}
+
+.danger-button:disabled {
+  border-color: var(--border);
+  background: #e2e7e4;
+  color: #66736d;
+}
+
 .command-error {
   display: grid;
   gap: 4px;
@@ -497,6 +516,25 @@ label {
 .reviewer-detail-grid {
   display: grid;
   gap: 16px;
+}
+
+.reviewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reviewer-actions .primary-button,
+.reviewer-actions .danger-button {
+  width: min(220px, 100%);
+}
+
+.decision-note-field {
+  flex-basis: 100%;
+}
+
+.reviewer-actions .empty-state {
+  width: 100%;
 }
 
 .field-list {

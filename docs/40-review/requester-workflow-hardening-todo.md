@@ -616,10 +616,10 @@ Lesson: a helper earns its name when it hides real repeated behavior. If it only
 
 ## Do Not Start Yet
 
-Do not start these until the requester hardening backlog above is substantially complete and the highest-priority post-hardening review items are fixed or intentionally deferred:
+Requester hardening is substantially complete, and the first reviewer decision slice has been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:
 
-- reviewer/admin workflow UI
-- reviewer/admin mutations
+- withdrawal/revocation workflow UI
+- admin workflow UI or mutations
 - organizations or tenants
 - uploads/documents
 - notifications or queues

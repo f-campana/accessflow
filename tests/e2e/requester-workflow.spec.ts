@@ -238,7 +238,9 @@ test("requester can submit a durable study access request", async ({ page }) => 
   expect(consoleMessages).toEqual([]);
 });
 
-test("reviewer can inspect submitted requests without mutations", async ({ page }) => {
+test("reviewer can reject an under-review request with a durable reason", async ({
+  page
+}) => {
   const consoleMessages: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") {
@@ -313,7 +315,7 @@ test("reviewer can inspect submitted requests without mutations", async ({ page 
     page.getByText("Signed in with reviewer access.")
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Submitted requests" })
+    page.getByRole("heading", { name: "Requests for review" })
   ).toBeVisible();
 
   const seededRequest = page
@@ -328,8 +330,180 @@ test("reviewer can inspect submitted requests without mutations", async ({ page 
   await expect(page.getByText(justification)).toBeVisible();
   await expect(page.getByText("submitRequest")).toBeVisible();
   await expect(page.getByText("draft to submitted")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
   await expect(page.getByRole("button", { name: /approve/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /reject/i })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+
+  await page.route("**/trpc/startReview**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  await page.getByRole("button", { name: "Start review" }).click();
+  const statusLine = page.locator(".status-line");
+  await expect(statusLine).toHaveAttribute("role", "status");
+  await expect(statusLine).toHaveText("Starting review");
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+
+  await expect(page.getByText("Review started.")).toBeVisible();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(
+    page.getByLabel("Request record").getByText("under_review", {
+      exact: true
+    })
+  ).toBeVisible();
+  await expect(page.getByText("startReview")).toBeVisible();
+  await expect(page.getByText("submitted to under_review")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve request" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reject request" })).toBeVisible();
+  await expect(page.getByLabel("Rejection reason")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.unroute("**/trpc/startReview**");
+
+  await page.getByRole("button", { name: "Reject request" }).click();
+
+  await expect(page.locator(".error-banner")).toHaveText(
+    "Rejection reason is required"
+  );
+
+  const rejectionReason = "Access purpose needs a narrower study scope.";
+
+  await page.getByLabel("Rejection reason").fill(rejectionReason);
+
+  await page.route("**/trpc/rejectRequest**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  await page.getByRole("button", { name: "Reject request" }).click();
+  await expect(statusLine).toHaveAttribute("role", "status");
+  await expect(statusLine).toHaveText("Rejecting request");
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+
+  await expect(page.getByText("Request rejected.")).toBeVisible();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(
+    page.getByLabel("Request record").getByText("rejected", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("Decision note")).toBeVisible();
+  await expect(page.getByText(rejectionReason)).toBeVisible();
+  await expect(page.getByText("rejectRequest")).toBeVisible();
+  await expect(page.getByText("under_review to rejected")).toBeVisible();
+  await expect(page.getByText(/Request rejected at .+\./)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+  await page.unroute("**/trpc/rejectRequest**");
+
+  expect(consoleMessages).toEqual([]);
+});
+
+test("reviewer can approve an under-review request", async ({ page }) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const requesterEmail = uniqueRequesterEmail();
+  const studyName = `Reviewer Approve Study ${Date.now()}`;
+  const purpose = "Approve submitted workflow evidence in a reviewer queue.";
+  const justification = "Reviewer needs to approve the persisted submission.";
+
+  const requester = {
+    id: crypto.randomUUID(),
+    email: requesterEmail,
+    role: "requester" as const
+  };
+
+  await db.insert(users).values({
+    id: requester.id,
+    name: requesterEmail,
+    email: requester.email,
+    emailVerified: true,
+    role: requester.role
+  });
+
+  const [study] = await db
+    .insert(studies)
+    .values({
+      slug: `reviewer-approve-study-${crypto.randomUUID()}`,
+      displayName: studyName,
+      shortDescription: "Synthetic reviewer approval e2e workspace.",
+      sensitivityLabel: "Synthetic regulated workspace"
+    })
+    .returning({ id: studies.id });
+
+  if (!study) {
+    throw new Error("Failed to create reviewer approval e2e study");
+  }
+
+  const created = await createDraft(requester, { studyId: study.id });
+
+  if (!created.ok) {
+    throw new Error(created.error.message);
+  }
+
+  const submitted = await submitRequest(requester, {
+    draftId: created.value.draftId,
+    idempotencyKey: `reviewer-approve-e2e-${crypto.randomUUID()}`,
+    purpose,
+    requestedRole: "viewer",
+    justification,
+    affiliation: "AccessFlow Reviewer E2E"
+  });
+
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/reviewer");
+
+  await expect(page.getByRole("heading", { name: "Reviewer queue" })).toBeVisible();
+  await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(
+    page.getByText("Signed in with reviewer access.")
+  ).toBeVisible();
+
+  const seededRequest = page
+    .getByRole("button")
+    .filter({ hasText: studyName })
+    .filter({ hasText: requesterEmail });
+
+  await expect(seededRequest).toBeVisible();
+  await seededRequest.click();
+
+  await expect(page.getByText(purpose)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Start review" }).click();
+
+  await expect(page.getByText("Review started.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve request" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reject request" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Approve request" }).click();
+
+  await expect(page.getByText("Request approved.")).toBeVisible();
+  await expect(
+    page.getByLabel("Request record").getByText("approved", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("approveRequest")).toBeVisible();
+  await expect(page.getByText("under_review to approved")).toBeVisible();
+  await expect(page.getByText(/Request approved at .+\./)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   expect(consoleMessages).toEqual([]);

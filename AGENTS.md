@@ -18,7 +18,7 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
-Current implementation scope is requester workflow plus reviewer read-only workflow: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, requester audit timeline, reviewer inbox/detail reads, and reviewer audit timeline reads. Reviewer/admin workflow mutations are roadmap until the reviewer read surface is stable.
+Current implementation scope is requester submission plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, requester audit timeline, reviewer inbox/detail reads, start review, approve request, reject request with reason, and reviewer audit timeline reads. Withdrawal, revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
 
 ## Project Shape
 
@@ -48,7 +48,7 @@ Keep ownership strict:
 - Keep forms plain React/HTML in v1. Conform is deferred.
 - Do not claim HIPAA, GDPR, clinical-grade, or medical-device compliance.
 - Do not add document uploads, notifications, queues, analytics, tenants/orgs, or a generic workflow builder unless explicitly requested.
-- Do not start reviewer/admin flows while `docs/40-review/requester-workflow-hardening-todo.md` still lists requester hardening work as the immediate sequence.
+- Do not start withdrawal, revocation, admin, upload, notification, tenant/org, or generic workflow-builder flows while the current reviewer decision slice is still under review.
 
 ## Backend And Persistence
 

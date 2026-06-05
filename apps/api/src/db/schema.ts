@@ -183,7 +183,32 @@ export const studyAccessRequests = pgTable(
         )
         or
         (
-          ${table.status} <> 'draft'
+          ${table.status} in ('submitted', 'under_review')
+          and ${table.submittedAt} is not null
+          and ${table.requestedRole} is not null
+          and ${table.decidedAt} is null
+          and ${table.decisionNote} is null
+        )
+        or
+        (
+          ${table.status} = 'approved'
+          and ${table.submittedAt} is not null
+          and ${table.requestedRole} is not null
+          and ${table.decidedAt} is not null
+          and ${table.decisionNote} is null
+        )
+        or
+        (
+          ${table.status} = 'rejected'
+          and ${table.submittedAt} is not null
+          and ${table.requestedRole} is not null
+          and ${table.decidedAt} is not null
+          and ${table.decisionNote} is not null
+          and length(trim(${table.decisionNote})) > 0
+        )
+        or
+        (
+          ${table.status} in ('withdrawn', 'revoked')
           and ${table.submittedAt} is not null
           and ${table.requestedRole} is not null
         )
@@ -266,9 +291,27 @@ export const studyAccessAuditEvents = pgTable(
       "study_access_audit_events_transition_check",
       sql`
         (
-          ${table.eventType} = 'submitRequest'
+          (${table.eventType})::text = 'submitRequest'
           and ${table.fromStatus} = 'draft'
           and ${table.toStatus} = 'submitted'
+        )
+        or
+        (
+          (${table.eventType})::text = 'startReview'
+          and ${table.fromStatus} = 'submitted'
+          and ${table.toStatus} = 'under_review'
+        )
+        or
+        (
+          (${table.eventType})::text = 'approveRequest'
+          and ${table.fromStatus} = 'under_review'
+          and ${table.toStatus} = 'approved'
+        )
+        or
+        (
+          (${table.eventType})::text = 'rejectRequest'
+          and ${table.fromStatus} = 'under_review'
+          and ${table.toStatus} = 'rejected'
         )
       `
     )
