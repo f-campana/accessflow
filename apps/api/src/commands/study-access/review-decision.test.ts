@@ -41,7 +41,8 @@ const createUnderReviewRequest = async () => {
   }
 
   const started = await startReview(reviewer, {
-    requestId: submitted.value.requestId
+    requestId: submitted.value.requestId,
+    idempotencyKey: `review-decision-start-${crypto.randomUUID()}`
   });
 
   if (!started.ok) {

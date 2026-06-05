@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db/client";
 import {
+  idempotencyKeys,
   studyAccessAuditEvents,
   studyAccessRequests
 } from "../../db/schema";
@@ -41,6 +42,8 @@ const createSubmittedRequest = async () => {
   };
 };
 
+const reviewKey = (name: string) => `${name}-${crypto.randomUUID()}`;
+
 describe("startReview", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -55,7 +58,8 @@ describe("startReview", () => {
     const submitted = await createSubmittedRequest();
 
     const result = await startReview(reviewer, {
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: reviewKey("start")
     });
 
     expect(result.ok).toBe(true);
@@ -101,7 +105,8 @@ describe("startReview", () => {
     const submitted = await createSubmittedRequest();
 
     const result = await startReview(admin, {
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: reviewKey("admin-start")
     });
 
     expect(result.ok).toBe(true);
@@ -128,7 +133,8 @@ describe("startReview", () => {
     const reviewer = await createTestActor("reviewer");
 
     const result = await startReview(reviewer, {
-      requestId: crypto.randomUUID()
+      requestId: crypto.randomUUID(),
+      idempotencyKey: reviewKey("not-found-start")
     });
 
     expect(result.ok).toBe(false);
@@ -148,7 +154,8 @@ describe("startReview", () => {
     }
 
     const result = await startReview(reviewer, {
-      requestId: created.value.requestId
+      requestId: created.value.requestId,
+      idempotencyKey: reviewKey("draft-start")
     });
 
     expect(result.ok).toBe(false);
@@ -157,15 +164,84 @@ describe("startReview", () => {
     }
   });
 
-  it("does not write a second audit event on duplicate start", async () => {
+  it("replays duplicate starts with the same idempotency key", async () => {
+    const reviewer = await createTestActor("reviewer");
+    const submitted = await createSubmittedRequest();
+    const idempotencyKey = reviewKey("replay-start");
+
+    const first = await startReview(reviewer, {
+      requestId: submitted.requestId,
+      idempotencyKey
+    });
+    const second = await startReview(reviewer, {
+      requestId: submitted.requestId,
+      idempotencyKey
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.value).toEqual(first.value);
+    }
+
+    const [auditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, submitted.requestId));
+    const [idempotencyCount] = await db
+      .select({ value: count() })
+      .from(idempotencyKeys)
+      .where(eq(idempotencyKeys.key, idempotencyKey));
+
+    expect(auditCount?.value).toBe(2);
+    expect(idempotencyCount?.value).toBe(1);
+  });
+
+  it("rejects duplicate start keys with different payloads", async () => {
+    const reviewer = await createTestActor("reviewer");
+    const firstSubmitted = await createSubmittedRequest();
+    const secondSubmitted = await createSubmittedRequest();
+    const idempotencyKey = reviewKey("start-conflict");
+
+    const first = await startReview(reviewer, {
+      requestId: firstSubmitted.requestId,
+      idempotencyKey
+    });
+    const second = await startReview(reviewer, {
+      requestId: secondSubmitted.requestId,
+      idempotencyKey
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.error.code).toBe("IdempotencyConflict");
+    }
+
+    const [firstAuditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, firstSubmitted.requestId));
+    const [secondAuditCount] = await db
+      .select({ value: count() })
+      .from(studyAccessAuditEvents)
+      .where(eq(studyAccessAuditEvents.requestId, secondSubmitted.requestId));
+
+    expect(firstAuditCount?.value).toBe(2);
+    expect(secondAuditCount?.value).toBe(1);
+  });
+
+  it("does not write a second audit event on a new duplicate start", async () => {
     const reviewer = await createTestActor("reviewer");
     const submitted = await createSubmittedRequest();
 
     const first = await startReview(reviewer, {
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: reviewKey("first-start")
     });
     const second = await startReview(reviewer, {
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: reviewKey("second-start")
     });
 
     expect(first.ok).toBe(true);
@@ -215,7 +291,8 @@ describe("startReview", () => {
     const result = await startReview(
       reviewer,
       {
-        requestId: crypto.randomUUID()
+        requestId: crypto.randomUUID(),
+        idempotencyKey: reviewKey("dependency-start")
       },
       {
         ...defaultDependencies,

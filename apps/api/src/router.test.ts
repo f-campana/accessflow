@@ -18,7 +18,7 @@ const unauthenticatedContext = {
   res: {}
 } as RequestContext;
 
-const decisionKey = (name: string) => `${name}-${crypto.randomUUID()}`;
+const commandKey = (name: string) => `${name}-${crypto.randomUUID()}`;
 
 const createSubmittedRequestForRouter = async (
   idempotencyKey: string
@@ -252,11 +252,18 @@ describe("tRPC auth boundary", () => {
       actor: reviewer
     });
 
+    const startIdempotencyKey = commandKey("router-start");
     const started = await caller.startReview({
-      requestId: submitted.value.requestId
+      requestId: submitted.value.requestId,
+      idempotencyKey: startIdempotencyKey
+    });
+    const replayedStart = await caller.startReview({
+      requestId: submitted.value.requestId,
+      idempotencyKey: startIdempotencyKey
     });
 
     expect(started.ok).toBe(true);
+    expect(replayedStart).toEqual(started);
 
     await expect(caller.reviewerInbox()).resolves.toEqual([
       expect.objectContaining({
@@ -300,9 +307,10 @@ describe("tRPC auth boundary", () => {
     });
 
     const started = await caller.startReview({
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: commandKey("router-approve-start")
     });
-    const approveIdempotencyKey = decisionKey("router-approve");
+    const approveIdempotencyKey = commandKey("router-approve");
     const approved = await caller.approveRequest({
       requestId: submitted.requestId,
       idempotencyKey: approveIdempotencyKey
@@ -388,11 +396,12 @@ describe("tRPC auth boundary", () => {
     });
 
     const started = await caller.startReview({
-      requestId: submitted.requestId
+      requestId: submitted.requestId,
+      idempotencyKey: commandKey("router-reject-start")
     });
     const rejected = await caller.rejectRequest({
       requestId: submitted.requestId,
-      idempotencyKey: decisionKey("router-reject"),
+      idempotencyKey: commandKey("router-reject"),
       reason
     });
 
@@ -484,7 +493,10 @@ describe("tRPC auth boundary", () => {
     });
 
     await expect(
-      caller.startReview({ requestId: submitted.value.requestId })
+      caller.startReview({
+        requestId: submitted.value.requestId,
+        idempotencyKey: commandKey("requester-forbidden-start")
+      })
     ).rejects.toMatchObject({
       code: "FORBIDDEN"
     } satisfies Partial<TRPCError>);
@@ -503,7 +515,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.approveRequest({
         requestId: submitted.requestId,
-        idempotencyKey: decisionKey("requester-forbidden-approve")
+        idempotencyKey: commandKey("requester-forbidden-approve")
       })
     ).rejects.toMatchObject({
       code: "FORBIDDEN"
@@ -512,7 +524,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.rejectRequest({
         requestId: submitted.requestId,
-        idempotencyKey: decisionKey("requester-forbidden-reject"),
+        idempotencyKey: commandKey("requester-forbidden-reject"),
         reason: "Requester cannot reject their own request."
       })
     ).rejects.toMatchObject({
@@ -612,7 +624,10 @@ describe("tRPC auth boundary", () => {
     const caller = appRouter.createCaller(unauthenticatedContext);
 
     await expect(
-      caller.startReview({ requestId: crypto.randomUUID() })
+      caller.startReview({
+        requestId: crypto.randomUUID(),
+        idempotencyKey: commandKey("unauthenticated-start")
+      })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED"
     } satisfies Partial<TRPCError>);
@@ -624,7 +639,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.approveRequest({
         requestId: crypto.randomUUID(),
-        idempotencyKey: decisionKey("unauthenticated-approve")
+        idempotencyKey: commandKey("unauthenticated-approve")
       })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED"
@@ -633,7 +648,7 @@ describe("tRPC auth boundary", () => {
     await expect(
       caller.rejectRequest({
         requestId: crypto.randomUUID(),
-        idempotencyKey: decisionKey("unauthenticated-reject"),
+        idempotencyKey: commandKey("unauthenticated-reject"),
         reason: "Unauthenticated users cannot reject requests."
       })
     ).rejects.toMatchObject({

@@ -11,10 +11,10 @@ import {
   type RequestAuthJson
 } from "./session-client";
 import {
-  getOrCreateReviewerDecisionAttempt,
-  reconcileReviewerDecisionAttempt,
-  type ReviewerDecisionAttempt
-} from "./reviewer-decision-attempt";
+  getOrCreateReviewerCommandAttempt,
+  reconcileReviewerCommandAttempt,
+  type ReviewerCommandAttempt
+} from "./reviewer-command-attempt";
 import {
   reviewerOperationStatus,
   type Actor,
@@ -40,6 +40,8 @@ const commandFallbackCopy = {
   rejectRequest: "Request could not be rejected."
 } as const;
 const commandRefreshFailureCopy = {
+  startReview:
+    "Review started, but the reviewer workspace could not refresh. Refresh before continuing.",
   approveRequest:
     "Request was approved, but the reviewer workspace could not refresh. Refresh before continuing.",
   rejectRequest:
@@ -103,8 +105,8 @@ export function useReviewerWorkspaceController({
     useState<ReviewerOperation>("loadingWorkspace");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [decisionAttempt, setDecisionAttempt] =
-    useState<ReviewerDecisionAttempt | null>(null);
+  const [commandAttempt, setCommandAttempt] =
+    useState<ReviewerCommandAttempt | null>(null);
 
   const operationStatus = useMemo(
     () => reviewerOperationStatus(operation),
@@ -131,8 +133,8 @@ export function useReviewerWorkspaceController({
         setSelectedRequestId(requestId);
         setDetail(nextDetail);
         setRejectionReason("");
-        setDecisionAttempt((currentAttempt) =>
-          reconcileReviewerDecisionAttempt(currentAttempt, nextDetail)
+        setCommandAttempt((currentAttempt) =>
+          reconcileReviewerCommandAttempt(currentAttempt, nextDetail)
         );
       } catch {
         setError(detailErrorCopy);
@@ -157,7 +159,7 @@ export function useReviewerWorkspaceController({
         setSelectedRequestId("");
         setDetail(null);
         setRejectionReason("");
-        setDecisionAttempt(null);
+        setCommandAttempt(null);
         return "signed-out";
       }
 
@@ -166,7 +168,7 @@ export function useReviewerWorkspaceController({
         setSelectedRequestId("");
         setDetail(null);
         setRejectionReason("");
-        setDecisionAttempt(null);
+        setCommandAttempt(null);
         setError("Reviewer access required.");
         return "forbidden";
       }
@@ -180,7 +182,7 @@ export function useReviewerWorkspaceController({
         setSelectedRequestId("");
         setDetail(null);
         setRejectionReason("");
-        setDecisionAttempt(null);
+        setCommandAttempt(null);
         return "ready";
       }
 
@@ -190,8 +192,8 @@ export function useReviewerWorkspaceController({
       setSelectedRequestId(nextSelectedRequestId);
       setDetail(nextDetail);
       setRejectionReason("");
-      setDecisionAttempt((currentAttempt) =>
-        reconcileReviewerDecisionAttempt(currentAttempt, nextDetail)
+      setCommandAttempt((currentAttempt) =>
+        reconcileReviewerCommandAttempt(currentAttempt, nextDetail)
       );
       return "ready";
     } catch {
@@ -240,7 +242,7 @@ export function useReviewerWorkspaceController({
       setSelectedRequestId("");
       setDetail(null);
       setRejectionReason("");
-      setDecisionAttempt(null);
+      setCommandAttempt(null);
       setNotice("Signed out.");
     } catch (caught) {
       setError(authErrorMessageFromCaught(caught, "Sign out failed"));
@@ -248,6 +250,25 @@ export function useReviewerWorkspaceController({
       setOperation("idle");
     }
   };
+
+  const refreshReviewerState = useCallback(
+    async (requestId: string) => {
+      const [nextInbox, nextDetail] = await Promise.all([
+        trpcClient.reviewerInbox.query(),
+        trpcClient.reviewerStudyAccessDetail.query({ requestId })
+      ]);
+
+      setInbox(nextInbox);
+      setSelectedRequestId(requestId);
+      setDetail(nextDetail);
+      setCommandAttempt((currentAttempt) =>
+        reconcileReviewerCommandAttempt(currentAttempt, nextDetail)
+      );
+
+      return nextDetail;
+    },
+    [trpcClient]
+  );
 
   const startReview = useCallback(async () => {
     if (!detail) {
@@ -260,49 +281,48 @@ export function useReviewerWorkspaceController({
     setError(null);
     setNotice(null);
 
-    try {
-      const result = await trpcClient.startReview.mutate({ requestId });
+    const nextAttempt = getOrCreateReviewerCommandAttempt(
+      commandAttempt,
+      {
+        commandName: "startReview",
+        payloadFingerprint: "",
+        requestId
+      },
+      createClientId
+    );
+    setCommandAttempt(nextAttempt);
 
+    const result = await trpcClient.startReview
+      .mutate({
+        requestId,
+        idempotencyKey: nextAttempt.idempotencyKey
+      })
+      .catch(() => null);
+
+    if (!result) {
+      setError(commandFallbackCopy.startReview);
+      setOperation("idle");
+      return;
+    }
+
+    try {
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("startReview", result.error));
+        if (result.error.code !== "Conflict") {
+          setCommandAttempt(null);
+        }
         return;
       }
 
-      const [nextInbox, nextDetail] = await Promise.all([
-        trpcClient.reviewerInbox.query(),
-        trpcClient.reviewerStudyAccessDetail.query({ requestId })
-      ]);
-
-      setInbox(nextInbox);
-      setSelectedRequestId(requestId);
-      setDetail(nextDetail);
+      await refreshReviewerState(requestId);
       setRejectionReason("");
       setNotice("Review started.");
     } catch {
-      setError(commandFallbackCopy.startReview);
+      setError(commandRefreshFailureCopy.startReview);
     } finally {
       setOperation("idle");
     }
-  }, [detail, trpcClient]);
-
-  const refreshReviewerState = useCallback(
-    async (requestId: string) => {
-      const [nextInbox, nextDetail] = await Promise.all([
-        trpcClient.reviewerInbox.query(),
-        trpcClient.reviewerStudyAccessDetail.query({ requestId })
-      ]);
-
-      setInbox(nextInbox);
-      setSelectedRequestId(requestId);
-      setDetail(nextDetail);
-      setDecisionAttempt((currentAttempt) =>
-        reconcileReviewerDecisionAttempt(currentAttempt, nextDetail)
-      );
-
-      return nextDetail;
-    },
-    [trpcClient]
-  );
+  }, [commandAttempt, createClientId, detail, refreshReviewerState, trpcClient]);
 
   const approveRequest = useCallback(async () => {
     if (!detail) {
@@ -315,8 +335,8 @@ export function useReviewerWorkspaceController({
     setError(null);
     setNotice(null);
 
-    const nextAttempt = getOrCreateReviewerDecisionAttempt(
-      decisionAttempt,
+    const nextAttempt = getOrCreateReviewerCommandAttempt(
+      commandAttempt,
       {
         commandName: "approveRequest",
         payloadFingerprint: "",
@@ -324,7 +344,7 @@ export function useReviewerWorkspaceController({
       },
       createClientId
     );
-    setDecisionAttempt(nextAttempt);
+    setCommandAttempt(nextAttempt);
 
     const result = await trpcClient.approveRequest
       .mutate({
@@ -343,7 +363,7 @@ export function useReviewerWorkspaceController({
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("approveRequest", result.error));
         if (result.error.code !== "Conflict") {
-          setDecisionAttempt(null);
+          setCommandAttempt(null);
         }
         return;
       }
@@ -356,7 +376,7 @@ export function useReviewerWorkspaceController({
     } finally {
       setOperation("idle");
     }
-  }, [createClientId, decisionAttempt, detail, refreshReviewerState, trpcClient]);
+  }, [commandAttempt, createClientId, detail, refreshReviewerState, trpcClient]);
 
   const rejectRequest = useCallback(async () => {
     if (!detail) {
@@ -370,8 +390,8 @@ export function useReviewerWorkspaceController({
     setError(null);
     setNotice(null);
 
-    const nextAttempt = getOrCreateReviewerDecisionAttempt(
-      decisionAttempt,
+    const nextAttempt = getOrCreateReviewerCommandAttempt(
+      commandAttempt,
       {
         commandName: "rejectRequest",
         payloadFingerprint: trimmedRejectionReason,
@@ -379,7 +399,7 @@ export function useReviewerWorkspaceController({
       },
       createClientId
     );
-    setDecisionAttempt(nextAttempt);
+    setCommandAttempt(nextAttempt);
 
     const result = await trpcClient.rejectRequest
       .mutate({
@@ -399,7 +419,7 @@ export function useReviewerWorkspaceController({
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("rejectRequest", result.error));
         if (result.error.code !== "Conflict") {
-          setDecisionAttempt(null);
+          setCommandAttempt(null);
         }
         return;
       }
@@ -413,8 +433,8 @@ export function useReviewerWorkspaceController({
       setOperation("idle");
     }
   }, [
+    commandAttempt,
     createClientId,
-    decisionAttempt,
     detail,
     refreshReviewerState,
     rejectionReason,

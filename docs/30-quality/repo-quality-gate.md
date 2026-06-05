@@ -103,7 +103,7 @@ For the reviewer path, verify:
 6. `approveRequest` moves the request to `approved`
 7. `rejectRequest` requires a reason and moves the request to `rejected`
 8. final approved/rejected states hide decision controls
-9. retryable approve/reject actions preserve one decision audit event per idempotency key
+9. retryable start/approve/reject actions preserve one workflow audit event per idempotency key
 10. audit timeline shows persisted `submitRequest`, `startReview`, and decision events
 11. no browser console errors or warnings
 12. no horizontal overflow at phone width

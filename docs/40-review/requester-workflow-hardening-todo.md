@@ -636,6 +636,28 @@ Plain summary: reviewer approval and rejection can now be retried safely with th
 
 Lesson: idempotency is not just a database table. The API must record enough result data to replay, and the UI must preserve the same key until it has confirmed persisted state.
 
+### 31. [x] Add Start-Review Idempotency
+
+Issue: `startReview` was still a workflow mutation without a replay contract. If the API moved a request from `submitted` to `under_review` and wrote the audit event, but the response was lost, retrying the command could only hit the already-updated workflow state.
+
+Why it matters: `startReview` is not a terminal approval/rejection decision, but it still changes durable state and writes an audit event. A retry should recover the original result, not ask the reviewer to infer that the operation probably worked.
+
+Fix direction: require an idempotency key for `startReview`, store pending/completed idempotency rows in the same command transaction, replay completed same-key/same-payload starts, reject same-key/different-request retries, and keep the web command key until refreshed state confirms `under_review`.
+
+Done when:
+
+- duplicate same-key start retries replay the original result
+- same-key different-request retries return `IdempotencyConflict`
+- new duplicate starts after `under_review` do not write another audit event
+- the reviewer UI keeps the same key through uncertain start-review retries
+- docs state that reviewer start/approve/reject idempotency is implemented
+
+Completed 2026-06-05: added a `startReview` idempotency key at the API validation boundary, stored/replayed `startReview` results through the shared idempotency helper, added command and router replay/conflict coverage, and generalized the reviewer web attempt helper from decision attempts to command attempts so `startReview`, `approveRequest`, and `rejectRequest` share one retry model. Verification: `pnpm --filter @accessflow/api test`, `pnpm --filter @accessflow/web test`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, Browser-rendered requester submit plus reviewer start-review smoke at 390px viewport with no console warnings/errors and no horizontal overflow, and `git diff --check`.
+
+Plain summary: starting review can now be retried safely with the same key. A retry returns the original `under_review` result instead of writing another start-review event.
+
+Lesson: once one workflow command has idempotent retry behavior, the next similar mutation should either match it or have a documented reason not to.
+
 ## Do Not Start Yet
 
 Requester hardening is substantially complete, and the first reviewer decision slice has been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:

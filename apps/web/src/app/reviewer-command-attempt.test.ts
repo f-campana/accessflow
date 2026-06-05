@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  getOrCreateReviewerDecisionAttempt,
-  isReviewerDecisionAttemptConfirmed,
-  reconcileReviewerDecisionAttempt
-} from "./reviewer-decision-attempt";
+  getOrCreateReviewerCommandAttempt,
+  isReviewerCommandAttemptConfirmed,
+  reconcileReviewerCommandAttempt
+} from "./reviewer-command-attempt";
 
-describe("reviewer decision attempt", () => {
+describe("reviewer command attempt", () => {
   it("creates a stable idempotency key for the same decision attempt", () => {
-    const first = getOrCreateReviewerDecisionAttempt(
+    const first = getOrCreateReviewerCommandAttempt(
       null,
       {
         commandName: "approveRequest",
@@ -17,7 +17,7 @@ describe("reviewer decision attempt", () => {
       },
       () => "key-1"
     );
-    const second = getOrCreateReviewerDecisionAttempt(
+    const second = getOrCreateReviewerCommandAttempt(
       first,
       {
         commandName: "approveRequest",
@@ -32,7 +32,7 @@ describe("reviewer decision attempt", () => {
   });
 
   it("creates a new key when the decision payload changes", () => {
-    const first = getOrCreateReviewerDecisionAttempt(
+    const first = getOrCreateReviewerCommandAttempt(
       null,
       {
         commandName: "rejectRequest",
@@ -41,7 +41,7 @@ describe("reviewer decision attempt", () => {
       },
       () => "key-1"
     );
-    const second = getOrCreateReviewerDecisionAttempt(
+    const second = getOrCreateReviewerCommandAttempt(
       first,
       {
         commandName: "rejectRequest",
@@ -54,8 +54,37 @@ describe("reviewer decision attempt", () => {
     expect(second.idempotencyKey).toBe("rejectRequest-key-2");
   });
 
+  it("clears the attempt after refreshed state confirms start-review", () => {
+    const attempt = getOrCreateReviewerCommandAttempt(
+      null,
+      {
+        commandName: "startReview",
+        payloadFingerprint: "",
+        requestId: "request-1"
+      },
+      () => "key-1"
+    );
+
+    expect(
+      isReviewerCommandAttemptConfirmed(attempt, {
+        request: {
+          id: "request-1",
+          status: "under_review"
+        }
+      })
+    ).toBe(true);
+    expect(
+      reconcileReviewerCommandAttempt(attempt, {
+        request: {
+          id: "request-1",
+          status: "under_review"
+        }
+      })
+    ).toBeNull();
+  });
+
   it("clears the attempt after refreshed state confirms the decision", () => {
-    const attempt = getOrCreateReviewerDecisionAttempt(
+    const attempt = getOrCreateReviewerCommandAttempt(
       null,
       {
         commandName: "rejectRequest",
@@ -66,7 +95,7 @@ describe("reviewer decision attempt", () => {
     );
 
     expect(
-      isReviewerDecisionAttemptConfirmed(attempt, {
+      isReviewerCommandAttemptConfirmed(attempt, {
         request: {
           id: "request-1",
           status: "rejected"
@@ -74,7 +103,7 @@ describe("reviewer decision attempt", () => {
       })
     ).toBe(true);
     expect(
-      reconcileReviewerDecisionAttempt(attempt, {
+      reconcileReviewerCommandAttempt(attempt, {
         request: {
           id: "request-1",
           status: "rejected"
@@ -84,7 +113,7 @@ describe("reviewer decision attempt", () => {
   });
 
   it("keeps the attempt when refreshed state is still not final", () => {
-    const attempt = getOrCreateReviewerDecisionAttempt(
+    const attempt = getOrCreateReviewerCommandAttempt(
       null,
       {
         commandName: "approveRequest",
@@ -95,7 +124,7 @@ describe("reviewer decision attempt", () => {
     );
 
     expect(
-      reconcileReviewerDecisionAttempt(attempt, {
+      reconcileReviewerCommandAttempt(attempt, {
         request: {
           id: "request-1",
           status: "under_review"

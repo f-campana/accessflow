@@ -85,7 +85,7 @@ Priority: P3 guardrail.
 
 Go: start the reviewer read workflow after fixing the XState documentation drift or including that doc fix as the first step of the reviewer pass.
 
-Historical No-Go: do not start reviewer approve/reject mutations until reviewer authorization, command errors, transition events, audit writes, and retry/idempotency behavior are explicitly designed or deferred. The 2026-06-05 reviewer decision pass satisfied the authorization, command-error, transition, and audit-write parts; decision idempotency remains intentionally deferred until reviewer retry UX exists.
+Historical No-Go: do not start reviewer approve/reject mutations until reviewer authorization, command errors, transition events, audit writes, and retry/idempotency behavior are explicitly designed or deferred. The 2026-06-05 reviewer decision and start-review idempotency passes later satisfied those reviewer retry-safety requirements for the implemented transition set.
 
 ## Next Recommended Pass
 
@@ -115,7 +115,7 @@ Reviewer decision workflow completed on 2026-06-05: `apps/api` now exposes revie
 
 Plain summary: reviewers can now move a submitted request into review, then approve or reject it. The UI only shows decision controls while the request is under review, and the audit timeline is still rendered from real database events.
 
-Lesson: a reviewer action should disappear only because the server returned a new persisted workflow state, not because the client hid it locally. Decision idempotency is still a separate future decision before adding retry-specific reviewer UX.
+Lesson: a reviewer action should disappear only because the server returned a new persisted workflow state, not because the client hid it locally. Decision idempotency was handled as a later retry-safety pass.
 
 Requester final-state visibility completed on 2026-06-05: requester reads now include rejected requests as visible final history without redefining rejected as an active request; the requester form stays read-only for approved/rejected outcomes; rejection notes and decision timestamps render beside the submitted timestamp; and the requester audit timeline shows the full submit/start-review/decision chain after sign-out/sign-in.
 
@@ -128,3 +128,9 @@ Reviewer decision idempotency completed on 2026-06-05: `approveRequest` and `rej
 Plain summary: if a reviewer approval or rejection is retried because the response was uncertain, the API can safely return the original decision instead of writing a second audit event.
 
 Lesson: idempotency only works when both sides participate. The API must store/replay the command result, and the UI must preserve the same key until persisted state confirms what happened.
+
+Reviewer start-review idempotency completed on 2026-06-05: `startReview` now requires a client-provided idempotency key, stores pending/completed idempotency records in the same transaction as the status update and audit event, replays completed same-key/same-payload review starts, rejects same-key/different-request retries with `IdempotencyConflict`, and avoids duplicate `startReview` audit events. The reviewer web controller now keeps one command key for start/approve/reject retries and clears the key only after refreshed persisted state confirms the target status.
+
+Plain summary: starting review now has the same retry safety as submit, approve, and reject. If the first response is lost, retrying with the same key can recover the original `under_review` result.
+
+Lesson: intermediate workflow transitions deserve retry semantics too when they mutate state and write audit events. They may be less business-final than approve/reject, but the same truthfulness rule applies.

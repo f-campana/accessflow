@@ -62,7 +62,8 @@ export const submitRequestInputSchema = draftFieldsSchema.extend({
 });
 
 export const startReviewInputSchema = z.object({
-  requestId: z.uuid()
+  requestId: z.uuid(),
+  idempotencyKey: z.string().trim().min(8).max(128)
 });
 
 export const approveRequestInputSchema = z.object({
