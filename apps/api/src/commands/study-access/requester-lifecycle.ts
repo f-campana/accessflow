@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   conflict,
+  err,
   forbidden,
   fromZod,
   notFound,
@@ -33,6 +34,7 @@ import {
   type WithdrawRequestInput,
   type WithdrawRequestInputFieldName
 } from "../validation";
+import { isActiveRequestUniqueViolation } from "./active-request-constraint";
 import { ensureRequester } from "./authorization";
 import {
   abortCommand,
@@ -305,6 +307,12 @@ const runRequesterLifecycleCommand = async <ResultValue>({
       return ok(response);
     });
   } catch (error) {
+    if (resetToDraft && isActiveRequestUniqueViolation(error)) {
+      return err(
+        conflict("Requester already has an active request for this study")
+      );
+    }
+
     return rollbackCommandError(error, dependencies);
   }
 };

@@ -1,5 +1,5 @@
 import { count, eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db/client";
 import {
@@ -13,6 +13,7 @@ import {
   resetDatabase
 } from "../../test-helpers/db";
 import { createDraft } from "./create-draft";
+import { defaultDependencies } from "./command-transaction";
 import { rejectRequest } from "./review-decision";
 import { reopenRequest, withdrawRequest } from "./requester-lifecycle";
 import { saveDraft } from "./save-draft";
@@ -282,5 +283,45 @@ describe("requester lifecycle commands", () => {
     if (!reopenSubmitted.ok) {
       expect(reopenSubmitted.error.code).toBe("InvalidTransition");
     }
+  });
+
+  it("maps reopen active-request unique-index races to conflict", async () => {
+    const reportUnexpectedError = vi.fn();
+    const uniqueViolation = {
+      cause: {
+        code: "23505",
+        constraint: "study_access_requests_active_requester_study_idx"
+      }
+    };
+
+    const result = await reopenRequest(
+      {
+        id: crypto.randomUUID(),
+        email: "requester@example.test",
+        role: "requester"
+      },
+      {
+        requestId: crypto.randomUUID(),
+        idempotencyKey: commandKey("reopen-race")
+      },
+      {
+        ...defaultDependencies,
+        db: {
+          transaction: async () => {
+            throw uniqueViolation;
+          }
+        } as unknown as typeof defaultDependencies.db,
+        reportUnexpectedError
+      }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("Conflict");
+      expect(result.error.message).toBe(
+        "Requester already has an active request for this study"
+      );
+    }
+    expect(reportUnexpectedError).not.toHaveBeenCalled();
   });
 });

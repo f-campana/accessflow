@@ -681,9 +681,133 @@ Plain summary: requesters can now stop a request before a decision or reopen a r
 
 Lesson: correction paths should be first-class workflow states. If the user is allowed to fix or stop something, the audit timeline should say exactly when that happened.
 
+### 33. [x] Map Reopen Active-Request Races To Typed Conflict
+
+Issue: `reopenRequest` checks whether the requester already has another active request, then updates the rejected request back to `draft`. If another active request is created in the tiny gap between those steps, the database unique index protects the data, but the command can surface the database error as a generic `Unexpected` failure.
+
+Why it matters: the API contract should stay truthful under concurrency. A requester who already has an active request should receive a typed `Conflict`, not a vague unexpected failure, because the state is valid and expected even if the timing is unlucky.
+
+Fix direction: reuse or extract the active-request unique-violation mapping from `createDraft`, then apply it to `reopenRequest`. Add a focused command test proving the unique-index race maps to `Conflict` instead of `Unexpected`.
+
+Done when:
+
+- `reopenRequest` maps the active requester/study unique violation to `Conflict`
+- the command test simulates the unique violation path
+- no broad command refactor is required for this fix
+- API tests, typecheck, lint, and `git diff --check` pass
+
+Plain summary: if two actions race and only one active request is allowed, the database should still protect us, and the user should get a normal conflict message instead of a scary unexpected error.
+
+Completed 2026-06-05: extracted the active-request unique-index detector from `createDraft` into a shared command helper and reused it in the `reopenRequest` lifecycle path. When reopen loses the race against another active request for the same requester/study, the command now returns typed `Conflict` with the same friendly message used by the pre-check instead of reporting an `Unexpected` failure.
+
+Verification passed: `pnpm --filter @accessflow/api test -- requester-lifecycle.test.ts create-draft.test.ts`, `pnpm lint`, `pnpm typecheck`, and `git diff --check`.
+
+Lesson: database constraints are part of the command contract. Pre-checks make the happy path friendly, but the catch path must translate the database's final authority into the same typed business error.
+
+### 34. [ ] Tighten Withdrawn State Persistence Invariants
+
+Issue: the database state-field check currently groups `withdrawn` with future `revoked` behavior and only requires `submittedAt` plus `requestedRole`. That permits impossible direct database rows like `withdrawn` with `decidedAt` or `decisionNote`, even though withdrawal only exists before a decision.
+
+Why it matters: AccessFlow is about durable workflow truth. The database should reject impossible lifecycle states, not merely rely on command code to avoid writing them.
+
+Fix direction: split `withdrawn` from `revoked` in the request state check. `withdrawn` should require `submittedAt` and `requestedRole`, and should require `decidedAt` plus `decisionNote` to be null. Add DB invariant tests that reject withdrawn rows with decision metadata.
+
+Done when:
+
+- the schema and migration encode a stricter withdrawn-row constraint
+- tests reject `withdrawn` rows with `decidedAt` or `decisionNote`
+- normal `submitted -> withdrawn` command behavior still passes
+- API tests, migration, typecheck, lint, and `git diff --check` pass
+
+Plain summary: a withdrawn request should mean “the requester stopped it before a decision,” not “a decided request with a withdrawn label.”
+
+### 35. [ ] Refresh Server Truth After Transition Conflicts
+
+Issue: requester and reviewer command error paths show the error but do not always refresh the affected record. If a second actor or tab changes the request first, the UI can display an old status with an action button that is no longer valid.
+
+Why it matters: local UI state should not keep offering obsolete workflow actions after the server says the transition is invalid. The safest recovery is to reload persisted server truth.
+
+Fix direction: after typed transition conflicts such as `InvalidTransition` or active-request `Conflict`, refresh the selected requester or reviewer record when possible. Keep the current friendly error copy, but align the visible buttons and status with the latest API projection.
+
+Done when:
+
+- requester lifecycle command conflicts refresh the selected study access record
+- reviewer command conflicts refresh inbox/detail state
+- tests prove stale local action state is corrected after a server conflict
+- web tests, typecheck, lint, and `git diff --check` pass
+
+Plain summary: if the server says “that action is no longer valid,” the screen should reload the real state so the user is not invited to click the same invalid action again.
+
+### 36. [ ] Render Decision Notes In Audit Timelines
+
+Issue: reopening a rejected request clears the current request `decisionNote`, which is correct for the new draft state, but the timeline UI only renders event type, status transition, and timestamp. The original rejection reason remains in the audit event note, but the user no longer sees it after reopening.
+
+Why it matters: the requester needs the reviewer feedback while correcting the draft. Clearing current decision metadata should not hide historical audit context.
+
+Fix direction: render audit event notes in requester and reviewer timelines when present. Keep current request-level decision note display for rejected state, but use audit notes as the durable history after reopen.
+
+Done when:
+
+- requester timeline shows the rejection note on the `rejectRequest` audit event
+- reviewer timeline shows the same note
+- reopened draft still clears current `decisionNote`
+- web tests cover the note after reopen
+
+Plain summary: reopening should make the form editable again, but it should not erase the reviewer’s reason from the visible history.
+
+### 37. [ ] Align Rendered Coverage With Withdrawal And Reopen Semantics
+
+Issue: API tests cover under-review withdrawal, and e2e covers submitted withdrawal plus rejected reopen. The rendered gate does not yet exercise under-review withdrawal, reviewer withdrawn final-state UI, or editing/saving after reopen.
+
+Why it matters: the quality gate says user-visible workflow changes need rendered proof. API tests prove command correctness, but they do not prove the phone-width UI shows the right controls and history.
+
+Fix direction: extend the mobile e2e path or add a focused e2e test for under-review withdrawal, reviewer withdrawn projection, and edit/save after reopening a rejected request. Keep the test small enough to remain useful rather than turning it into a brittle full-product script.
+
+Done when:
+
+- rendered tests cover `under_review -> withdrawn`
+- reviewer withdrawn detail hides decision controls
+- reopened requests can be edited and saved in the browser
+- no console warnings/errors and no horizontal overflow are asserted
+
+Plain summary: the browser should prove the same things the API already proves for these user-visible states.
+
+### 38. [ ] Reduce Requester Command Attempt Duplication Before More Requester Commands
+
+Issue: the requester controller now has separate submit and lifecycle attempt models, separate reconciliation paths, and repeated mutate-refresh-confirm-finally code. This is acceptable for the current slice, but it will become harder to reason about if more requester commands are added.
+
+Why it matters: idempotent UI command attempts are a core concept now. Keeping several parallel mini-state-machines in one controller makes stale-state and retry bugs more likely.
+
+Fix direction: before adding another requester command, introduce one typed requester command-attempt model keyed by command name, subject id, idempotency key, and confirmed target status. Do not refactor this just for aesthetics; do it when it removes duplication before the next requester mutation.
+
+Done when:
+
+- submit, withdraw, and reopen use one command-attempt model
+- confirmation logic is typed by command and target status, not `status: string`
+- controller code gets smaller or materially easier to scan
+- existing requester tests still cover idempotency-key reuse and clearing
+
+Plain summary: one retry model is easier to trust than separate retry models that all do almost the same thing.
+
+### 39. [ ] Clarify Reviewer Queue Versus Workflow History
+
+Issue: the reviewer “queue” now lists submitted, under-review, approved, rejected, and withdrawn requests. That is useful as a lightweight history browser, but the label “Requests for review” no longer describes final approved/rejected/withdrawn rows.
+
+Why it matters: product language should match behavior. A reviewer queue sounds actionable; final rows are not actionable.
+
+Fix direction: either rename the current reviewer list to something like “Workflow requests” / “Review history,” or split active review queue from final history when the UI needs that distinction.
+
+Done when:
+
+- visible copy no longer implies final rows are still waiting for review
+- tests/docs use the same language as the UI
+- no new admin surface is introduced only to solve naming
+
+Plain summary: if a list contains history, it should not pretend everything in it is still waiting for action.
+
 ## Do Not Start Yet
 
-Requester hardening is substantially complete, and the first reviewer decision/remediation slices have been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and any new high-priority findings are handled:
+Requester hardening is substantially complete, and the first reviewer decision/remediation slices have been implemented. Do not start these broader surfaces until the current requester/reviewer workflow is reviewed and the new high-priority findings above are handled:
 
 - revocation workflow UI
 - admin workflow UI or mutations

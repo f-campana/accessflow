@@ -27,6 +27,7 @@ import {
   type CreateDraftInputFieldName
 } from "../validation";
 import type { CommandDependencies } from "../types";
+import { isActiveRequestUniqueViolation } from "./active-request-constraint";
 import { ensureRequester } from "./authorization";
 import {
   abortCommand,
@@ -34,9 +35,6 @@ import {
   rollbackCommandError
 } from "./command-transaction";
 import { definedDraftValues } from "./draft-fields";
-
-const activeRequestConstraintName =
-  "study_access_requests_active_requester_study_idx";
 
 export type CreateDraftResult = {
   requestId: string;
@@ -98,26 +96,6 @@ const activeRequestResult = (
     draftId: activeRequest.draftId,
     status: "draft"
   });
-};
-
-const isActiveRequestUniqueViolation = (error: unknown): boolean => {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-
-  const maybePgError = error as {
-    code?: unknown;
-    constraint?: unknown;
-    cause?: unknown;
-  };
-
-  const isDirectUniqueViolation =
-    maybePgError.code === "23505" &&
-    maybePgError.constraint === activeRequestConstraintName;
-
-  return (
-    isDirectUniqueViolation || isActiveRequestUniqueViolation(maybePgError.cause)
-  );
 };
 
 export const createDraft = async (
