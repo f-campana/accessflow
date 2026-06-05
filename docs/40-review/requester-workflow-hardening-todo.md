@@ -727,7 +727,7 @@ Verification passed: `pnpm --filter @accessflow/api test -- schema-invariants.te
 
 Lesson: workflow meanings should be enforced at the lowest durable boundary. If `withdrawn` means “stopped before decision,” the database should reject rows that tell a different story.
 
-### 35. [ ] Refresh Server Truth After Transition Conflicts
+### 35. [x] Refresh Server Truth After Transition Conflicts
 
 Issue: requester and reviewer command error paths show the error but do not always refresh the affected record. If a second actor or tab changes the request first, the UI can display an old status with an action button that is no longer valid.
 
@@ -743,6 +743,12 @@ Done when:
 - web tests, typecheck, lint, and `git diff --check` pass
 
 Plain summary: if the server says “that action is no longer valid,” the screen should reload the real state so the user is not invited to click the same invalid action again.
+
+Completed 2026-06-06: requester and reviewer command error paths now treat `Conflict` and `InvalidTransition` as refresh-worthy stale-state errors. The UI keeps the friendly command error visible, then reloads the selected requester access record or reviewer inbox/detail projection when possible, so stale buttons disappear and the visible status matches persisted server truth. Added unit coverage for the refresh trigger helpers and mobile Playwright coverage for stale requester withdrawal after an external rejection plus stale reviewer start-review after an external review start.
+
+Verification passed: `pnpm --filter @accessflow/web test`, `pnpm exec playwright test --grep "conflict refreshes stale"`, `pnpm lint`, `pnpm typecheck`, `git diff --check`, and in-app Browser smoke on `http://localhost:3000` with requester sign-in, workspace rendering, screenshot evidence, and no console warnings/errors.
+
+Lesson: a typed command error is not only a message. For stale workflow actions, it is also a signal to reload server truth before the user can keep acting on the old screen.
 
 ### 36. [ ] Render Decision Notes In Audit Timelines
 

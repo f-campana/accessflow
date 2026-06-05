@@ -88,6 +88,10 @@ const reviewerCommandErrorMessage = (
   }
 };
 
+export const shouldRefreshReviewerStateAfterCommandError = (
+  error: ReviewerCommandError
+) => error.code === "Conflict" || error.code === "InvalidTransition";
+
 type ReviewerLoadResult = "signed-out" | "forbidden" | "ready" | "error";
 
 export function useReviewerWorkspaceController({
@@ -270,6 +274,18 @@ export function useReviewerWorkspaceController({
     [trpcClient]
   );
 
+  const refreshReviewerStateAfterCommandError = useCallback(
+    async (requestId: string) => {
+      try {
+        await refreshReviewerState(requestId);
+      } catch {
+        // Keep the original command error visible. The command did not confirm,
+        // so success-style refresh failure copy would be misleading here.
+      }
+    },
+    [refreshReviewerState]
+  );
+
   const startReview = useCallback(async () => {
     if (!detail) {
       return;
@@ -308,6 +324,9 @@ export function useReviewerWorkspaceController({
     try {
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("startReview", result.error));
+        if (shouldRefreshReviewerStateAfterCommandError(result.error)) {
+          await refreshReviewerStateAfterCommandError(requestId);
+        }
         if (result.error.code !== "Conflict") {
           setCommandAttempt(null);
         }
@@ -322,7 +341,14 @@ export function useReviewerWorkspaceController({
     } finally {
       setOperation("idle");
     }
-  }, [commandAttempt, createClientId, detail, refreshReviewerState, trpcClient]);
+  }, [
+    commandAttempt,
+    createClientId,
+    detail,
+    refreshReviewerState,
+    refreshReviewerStateAfterCommandError,
+    trpcClient
+  ]);
 
   const approveRequest = useCallback(async () => {
     if (!detail) {
@@ -362,6 +388,9 @@ export function useReviewerWorkspaceController({
     try {
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("approveRequest", result.error));
+        if (shouldRefreshReviewerStateAfterCommandError(result.error)) {
+          await refreshReviewerStateAfterCommandError(requestId);
+        }
         if (result.error.code !== "Conflict") {
           setCommandAttempt(null);
         }
@@ -376,7 +405,14 @@ export function useReviewerWorkspaceController({
     } finally {
       setOperation("idle");
     }
-  }, [commandAttempt, createClientId, detail, refreshReviewerState, trpcClient]);
+  }, [
+    commandAttempt,
+    createClientId,
+    detail,
+    refreshReviewerState,
+    refreshReviewerStateAfterCommandError,
+    trpcClient
+  ]);
 
   const rejectRequest = useCallback(async () => {
     if (!detail) {
@@ -418,6 +454,9 @@ export function useReviewerWorkspaceController({
     try {
       if (!result.ok) {
         setError(reviewerCommandErrorMessage("rejectRequest", result.error));
+        if (shouldRefreshReviewerStateAfterCommandError(result.error)) {
+          await refreshReviewerStateAfterCommandError(requestId);
+        }
         if (result.error.code !== "Conflict") {
           setCommandAttempt(null);
         }
@@ -436,6 +475,7 @@ export function useReviewerWorkspaceController({
     commandAttempt,
     createClientId,
     detail,
+    refreshReviewerStateAfterCommandError,
     refreshReviewerState,
     rejectionReason,
     trpcClient

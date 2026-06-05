@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  deriveRequesterWorkspaceControllerState
+  deriveRequesterWorkspaceControllerState,
+  shouldRefreshRequesterStateAfterCommandError
 } from "./requester-workspace-controller";
 import type { Study, StudyAccess } from "./requester-workspace-model";
 
@@ -150,5 +151,28 @@ describe("requester workspace controller state", () => {
 
     expect(state.canWithdraw).toBe(true);
     expect(state.canReopenRejected).toBe(false);
+  });
+
+  it("refreshes server truth for requester command state conflicts", () => {
+    expect(
+      shouldRefreshRequesterStateAfterCommandError({
+        code: "InvalidTransition",
+        message: "Action is no longer available"
+      })
+    ).toBe(true);
+    expect(
+      shouldRefreshRequesterStateAfterCommandError({
+        code: "Conflict",
+        message: "Request changed"
+      })
+    ).toBe(true);
+    expect(
+      shouldRefreshRequesterStateAfterCommandError({
+        code: "ValidationError",
+        message: "Validation failed",
+        formErrors: [],
+        fieldErrors: {}
+      })
+    ).toBe(false);
   });
 });

@@ -1,12 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
+import { eq } from "drizzle-orm";
 
-import { createDraft, submitRequest } from "../../apps/api/src/commands/study-access";
+import {
+  createDraft,
+  rejectRequest,
+  startReview,
+  submitRequest
+} from "../../apps/api/src/commands/study-access";
 import {
   demoAccounts,
   demoAuthPassword
 } from "../../apps/api/src/db/demo-accounts";
 import { db, pool } from "../../apps/api/src/db/client";
-import { studies, users } from "../../apps/api/src/db/schema";
+import {
+  studies,
+  studyAccessRequests,
+  users
+} from "../../apps/api/src/db/schema";
 
 const uniqueRequesterEmail = () =>
   `requester-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`;
@@ -75,6 +85,48 @@ const expectFocusedElementInsideViewport = async (page: Page) => {
   expect(focusedElementBounds?.bottom).toBeLessThanOrEqual(
     (focusedElementBounds?.viewportHeight ?? 0) + 1
   );
+};
+
+const findSeededActor = async (
+  email: string,
+  role: "requester" | "reviewer" | "admin"
+) => {
+  const [actor] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role
+    })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  if (!actor || actor.role !== role) {
+    throw new Error(`Expected seeded ${role} actor ${email}`);
+  }
+
+  return {
+    id: actor.id,
+    email: actor.email,
+    role
+  };
+};
+
+const findLatestRequesterRequest = async (requesterId: string) => {
+  const [request] = await db
+    .select({
+      id: studyAccessRequests.id,
+      studyId: studyAccessRequests.studyId
+    })
+    .from(studyAccessRequests)
+    .where(eq(studyAccessRequests.requesterId, requesterId))
+    .limit(1);
+
+  if (!request) {
+    throw new Error(`Expected request for requester ${requesterId}`);
+  }
+
+  return request;
 };
 
 test("requester can submit a durable study access request", async ({ page }) => {
@@ -358,6 +410,77 @@ test("requester sees rejected final state after reviewer decision", async ({
   expect(consoleMessages).toEqual([]);
 });
 
+test("requester conflict refreshes stale submitted state", async ({ page }) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const requesterEmail = uniqueRequesterEmail();
+  const reviewer = await findSeededActor(demoReviewer.email, "reviewer");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByLabel("Email").fill(requesterEmail);
+  await page.getByRole("button", { name: "Create new requester" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Create request draft" }).click();
+  await expect(page.getByText(/Draft .+ created\./)).toBeVisible();
+  await page.getByLabel("Purpose").fill("Keep stale requester state visible.");
+  await page.getByLabel("Requested role").selectOption("viewer");
+  await page
+    .getByLabel("Justification")
+    .fill("Another reviewer will change the state before withdrawal.");
+  await page.getByLabel("Affiliation").fill("AccessFlow E2E");
+  await page.getByRole("button", { name: "Submit request" }).click();
+
+  await expect(page.getByText(/Request .+ submitted\./)).toBeVisible();
+  await expect(page.getByText("submitted", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw request" })).toBeVisible();
+
+  const requester = await findSeededActor(requesterEmail, "requester");
+  const request = await findLatestRequesterRequest(requester.id);
+  const started = await startReview(reviewer, {
+    requestId: request.id,
+    idempotencyKey: `stale-requester-start-${crypto.randomUUID()}`
+  });
+
+  if (!started.ok) {
+    throw new Error(started.error.message);
+  }
+
+  const rejected = await rejectRequest(reviewer, {
+    requestId: request.id,
+    idempotencyKey: `stale-requester-reject-${crypto.randomUUID()}`,
+    reason: "State changed before requester withdrawal."
+  });
+
+  if (!rejected.ok) {
+    throw new Error(rejected.error.message);
+  }
+
+  await page.getByRole("button", { name: "Withdraw request" }).click();
+
+  await expect(page.getByText("Action is not available")).toBeVisible();
+  await expect(page.getByText("rejected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reopen for edits" })).toBeVisible();
+  await expect(page.getByText("rejectRequest")).toBeVisible();
+  await expect(page.getByText("under_review to rejected")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  expect(consoleMessages).toEqual([]);
+});
+
 test("reviewer can reject an under-review request with a durable reason", async ({
   page
 }) => {
@@ -516,6 +639,112 @@ test("reviewer can reject an under-review request with a durable reason", async 
   await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await page.unroute("**/trpc/rejectRequest**");
+
+  expect(consoleMessages).toEqual([]);
+});
+
+test("reviewer conflict refreshes stale submitted detail", async ({ page }) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const requesterEmail = uniqueRequesterEmail();
+  const studyName = `Reviewer Stale Study ${Date.now()}`;
+  const reviewer = await findSeededActor(demoReviewer.email, "reviewer");
+  const requester = {
+    id: crypto.randomUUID(),
+    email: requesterEmail,
+    role: "requester" as const
+  };
+
+  await db.insert(users).values({
+    id: requester.id,
+    name: requesterEmail,
+    email: requester.email,
+    emailVerified: true,
+    role: requester.role
+  });
+
+  const [study] = await db
+    .insert(studies)
+    .values({
+      slug: `reviewer-stale-study-${crypto.randomUUID()}`,
+      displayName: studyName,
+      shortDescription: "Synthetic reviewer stale-state workspace.",
+      sensitivityLabel: "Synthetic regulated workspace"
+    })
+    .returning({ id: studies.id });
+
+  if (!study) {
+    throw new Error("Failed to create reviewer stale-state study");
+  }
+
+  const created = await createDraft(requester, { studyId: study.id });
+
+  if (!created.ok) {
+    throw new Error(created.error.message);
+  }
+
+  const submitted = await submitRequest(requester, {
+    draftId: created.value.draftId,
+    idempotencyKey: `reviewer-stale-submit-${crypto.randomUUID()}`,
+    purpose: "Expose stale reviewer start-review state.",
+    requestedRole: "viewer",
+    justification: "The request will enter review before the visible click.",
+    affiliation: "AccessFlow Reviewer E2E"
+  });
+
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/reviewer");
+
+  await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const staleRequest = page
+    .getByRole("button")
+    .filter({ hasText: studyName })
+    .filter({ hasText: requesterEmail });
+
+  await expect(staleRequest).toBeVisible();
+  await staleRequest.click();
+  await expect(
+    page.getByLabel("Request record").getByText("submitted", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toBeVisible();
+
+  const started = await startReview(reviewer, {
+    requestId: submitted.value.requestId,
+    idempotencyKey: `reviewer-stale-start-${crypto.randomUUID()}`
+  });
+
+  if (!started.ok) {
+    throw new Error(started.error.message);
+  }
+
+  await page.getByRole("button", { name: "Start review" }).click();
+
+  await expect(page.getByText("Only submitted requests can enter review.")).toBeVisible();
+  await expect(
+    page.getByLabel("Request record").getByText("under_review", {
+      exact: true
+    })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve request" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reject request" })).toBeVisible();
+  await expect(page.getByText("startReview")).toBeVisible();
+  await expect(page.getByText("submitted to under_review")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 
   expect(consoleMessages).toEqual([]);
 });

@@ -72,6 +72,9 @@ type RequesterWorkspaceControllerStateInput = {
 
 export const createRequesterClientId = createSessionClientId;
 
+export const shouldRefreshRequesterStateAfterCommandError = (error: AppError) =>
+  error.code === "Conflict" || error.code === "InvalidTransition";
+
 export const deriveRequesterWorkspaceControllerState = ({
   access,
   canRetryRefresh,
@@ -395,6 +398,25 @@ export function useRequesterWorkspaceController({
     }
   };
 
+  const refreshAfterCommandError = async (studyId: string, error: AppError) => {
+    setError(error);
+
+    if (!shouldRefreshRequesterStateAfterCommandError(error)) {
+      return;
+    }
+
+    try {
+      await reloadStudyAccess(studyId);
+      setCanRetryRefresh(false);
+    } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
+      setCanRetryRefresh(true);
+    }
+  };
+
   const retrySelectedStudyRefresh = async () => {
     const studyId = selectedStudyIdRef.current;
 
@@ -451,7 +473,7 @@ export function useRequesterWorkspaceController({
           return;
         }
 
-        setError(response.error);
+        await refreshAfterCommandError(studyId, response.error);
         return;
       }
 
@@ -498,7 +520,7 @@ export function useRequesterWorkspaceController({
           return;
         }
 
-        setError(response.error);
+        await refreshAfterCommandError(studyId, response.error);
         return;
       }
 
@@ -553,7 +575,7 @@ export function useRequesterWorkspaceController({
           return;
         }
 
-        setError(response.error);
+        await refreshAfterCommandError(studyId, response.error);
         return;
       }
 
@@ -611,7 +633,7 @@ export function useRequesterWorkspaceController({
           return;
         }
 
-        setError(response.error);
+        await refreshAfterCommandError(studyId, response.error);
         return;
       }
 
@@ -670,7 +692,7 @@ export function useRequesterWorkspaceController({
           return;
         }
 
-        setError(response.error);
+        await refreshAfterCommandError(studyId, response.error);
         return;
       }
 
