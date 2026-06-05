@@ -704,7 +704,7 @@ Verification passed: `pnpm --filter @accessflow/api test -- requester-lifecycle.
 
 Lesson: database constraints are part of the command contract. Pre-checks make the happy path friendly, but the catch path must translate the database's final authority into the same typed business error.
 
-### 34. [ ] Tighten Withdrawn State Persistence Invariants
+### 34. [x] Tighten Withdrawn State Persistence Invariants
 
 Issue: the database state-field check currently groups `withdrawn` with future `revoked` behavior and only requires `submittedAt` plus `requestedRole`. That permits impossible direct database rows like `withdrawn` with `decidedAt` or `decisionNote`, even though withdrawal only exists before a decision.
 
@@ -720,6 +720,12 @@ Done when:
 - API tests, migration, typecheck, lint, and `git diff --check` pass
 
 Plain summary: a withdrawn request should mean “the requester stopped it before a decision,” not “a decided request with a withdrawn label.”
+
+Completed 2026-06-06: split the `withdrawn` and `revoked` branches in the request state-field check. A withdrawn request still requires `submittedAt` and `requestedRole`, but now also requires `decidedAt` and `decisionNote` to stay null. Added database invariant coverage for withdrawn rows with decision metadata, generated migration `0009_fresh_wolfpack`, and kept the normal withdrawal command path passing.
+
+Verification passed: `pnpm --filter @accessflow/api test -- schema-invariants.test.ts requester-lifecycle.test.ts`, `pnpm --filter @accessflow/api db:migrate`, `pnpm lint`, `pnpm typecheck`, and `git diff --check`.
+
+Lesson: workflow meanings should be enforced at the lowest durable boundary. If `withdrawn` means “stopped before decision,” the database should reject rows that tell a different story.
 
 ### 35. [ ] Refresh Server Truth After Transition Conflicts
 

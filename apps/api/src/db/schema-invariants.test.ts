@@ -204,4 +204,34 @@ describe("database workflow invariants", () => {
       "study_access_audit_events_transition_check"
     );
   });
+
+  it("rejects withdrawn requests with decision metadata", async () => {
+    const actor = await createTestActor();
+    const study = await createTestStudy();
+    const submittedAt = new Date();
+
+    await expectConstraintViolation(
+      db.insert(studyAccessRequests).values({
+        requesterId: actor.id,
+        studyId: study.id,
+        status: "withdrawn",
+        requestedRole: "viewer",
+        submittedAt,
+        decidedAt: new Date()
+      }),
+      "study_access_requests_state_fields_check"
+    );
+
+    await expectConstraintViolation(
+      db.insert(studyAccessRequests).values({
+        requesterId: actor.id,
+        studyId: study.id,
+        status: "withdrawn",
+        requestedRole: "viewer",
+        submittedAt,
+        decisionNote: "Withdrawn rows cannot carry review decisions"
+      }),
+      "study_access_requests_state_fields_check"
+    );
+  });
 });

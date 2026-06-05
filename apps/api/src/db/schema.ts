@@ -208,7 +208,15 @@ export const studyAccessRequests = pgTable(
         )
         or
         (
-          ${table.status} in ('withdrawn', 'revoked')
+          ${table.status} = 'withdrawn'
+          and ${table.submittedAt} is not null
+          and ${table.requestedRole} is not null
+          and ${table.decidedAt} is null
+          and ${table.decisionNote} is null
+        )
+        or
+        (
+          ${table.status} = 'revoked'
           and ${table.submittedAt} is not null
           and ${table.requestedRole} is not null
         )
