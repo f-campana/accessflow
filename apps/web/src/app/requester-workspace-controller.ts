@@ -327,7 +327,7 @@ export function useRequesterWorkspaceController({
       await loadWorkspace();
       setNotice(
         mode === "sign-up/email"
-          ? `Created requester account ${nextEmail}.`
+          ? `Created throwaway requester ${nextEmail}. Sign in with this same email to return to its requests.`
           : "Signed in with a requester session."
       );
     } catch (caught) {

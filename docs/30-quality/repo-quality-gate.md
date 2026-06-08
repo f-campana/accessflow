@@ -79,7 +79,7 @@ The smoke check must cover the affected workflow, not only page load.
 
 For the requester path, verify:
 
-1. seeded requester sign-in and new requester account creation
+1. seeded requester sign-in and throwaway requester account creation
 2. friendly auth errors, with no raw JSON shown to the user
 3. seeded study visibility
 4. draft creation
@@ -87,7 +87,7 @@ For the requester path, verify:
 6. request submission
 7. persisted `submitted` state
 8. audit timeline event
-9. sign-out/sign-in and refresh do not lie about workflow state
+9. sign-out/sign-in with the same requester email and refresh do not lie about workflow state
 10. approved/rejected final states remain visible after reviewer decisions
 11. rejection notes and decision audit events are visible to the requester
 12. submitted or under-review requests can be withdrawn with a persisted audit event

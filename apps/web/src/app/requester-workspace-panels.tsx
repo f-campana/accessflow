@@ -94,9 +94,15 @@ export function AuthPanel({
     <section className="panel auth-panel" aria-labelledby="auth-title">
       <div>
         <p className="eyebrow">Requester login</p>
-        <h2 id="auth-title">Use seeded access or create a requester</h2>
+        <h2 id="auth-title">Sign in to an existing requester</h2>
         <p className="form-hint">
-          Seeded requester: {demoAccounts.requester.email}
+          The form defaults to seeded requester {demoAccounts.requester.email}.
+          Reviewer rows show the requester email that owns each request.
+        </p>
+        <p className="form-hint">
+          To return to a submitted or approved request, sign in with that same
+          requester email. Creating a throwaway requester starts a separate
+          history.
         </p>
       </div>
 
@@ -133,17 +139,17 @@ export function AuthPanel({
         <button
           type="button"
           className="primary-button"
-          onClick={() => onAuthenticate("sign-up/email")}
-          disabled={busy}
-        >
-          Create new requester
-        </button>
-        <button
-          type="button"
           onClick={() => onAuthenticate("sign-in/email")}
           disabled={busy}
         >
-          Sign in
+          Sign in to requester
+        </button>
+        <button
+          type="button"
+          onClick={() => onAuthenticate("sign-up/email")}
+          disabled={busy}
+        >
+          Create throwaway requester
         </button>
       </div>
     </section>

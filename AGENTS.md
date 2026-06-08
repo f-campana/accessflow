@@ -18,7 +18,7 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
-Current implementation scope is requester submission/remediation plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, withdraw submitted or under-review requests, reopen rejected requests for edits, requester audit timeline, requester approved/rejected/withdrawn final-state visibility, reviewer workflow list/detail reads, start review, approve request, reject request with reason, start/approve/reject idempotency, and reviewer audit timeline reads. Revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
+Current implementation scope is requester submission/remediation plus reviewer decisions: stable seeded demo sign-in, throwaway requester creation, study read, draft create/save, submit, withdraw submitted or under-review requests, reopen rejected requests for edits, requester audit timeline, requester approved/rejected/withdrawn final-state visibility, reviewer workflow list/detail reads, start review, approve request, reject request with reason, start/approve/reject idempotency, and reviewer audit timeline reads. Revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
 
 ## Project Shape
 
@@ -96,7 +96,7 @@ For any user-visible web change, also run a real rendered smoke check before rep
 - Playwright/browser automation at desktop and mobile widths
 - iOS Simulator only when explicitly validating Safari/iPhone behavior
 
-The smoke check should cover the affected workflow, not only page load. For the requester path, verify seeded sign-in, new requester creation, seeded study visibility, draft creation, submission, withdrawal, rejected-request reopening, persisted audit event rendering after sign-out/sign-in, approved/rejected/withdrawn final-state visibility after reviewer decisions, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
+The smoke check should cover the affected workflow, not only page load. For the requester path, verify seeded sign-in, throwaway requester creation, seeded study visibility, draft creation, submission, withdrawal, rejected-request reopening, persisted audit event rendering after sign-out/sign-in with the same requester email, approved/rejected/withdrawn final-state visibility after reviewer decisions, no raw JSON errors, and no horizontal overflow on a phone-width viewport.
 
 If dependencies change:
 
@@ -123,6 +123,10 @@ For a clean human-test baseline:
 pnpm demo:reset
 pnpm mobile:preview
 ```
+
+Requester-owned workflow state is intentionally scoped by account. Use the
+requester email shown in reviewer rows when returning to a submitted or approved
+request; creating a throwaway requester starts a separate history.
 
 `demo:reset` is intentionally destructive but guarded: it may only reset the local preview database at `localhost:55433/accessflow`. Do not weaken that safety check.
 

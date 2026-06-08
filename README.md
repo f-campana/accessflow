@@ -144,7 +144,12 @@ That command starts Postgres, applies API migrations, seeds the synthetic study 
 0 stale generated studies
 ```
 
-For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, new requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in, reviewer submitted-request reads, reviewer start-review, reviewer approve/reject, requester visibility for approved/rejected final states, readable auth errors, and no horizontal overflow at phone width.
+For UI changes, verify the rendered app with Browser or Playwright in addition to code checks. The current mobile smoke path should cover seeded demo sign-in, throwaway requester creation, seeded study visibility, draft creation, submission, persisted audit timeline after sign-out/sign-in with the same requester email, reviewer submitted-request reads, reviewer start-review, reviewer approve/reject, requester visibility for approved/rejected final states, readable auth errors, and no horizontal overflow at phone width.
+
+When testing requester persistence manually, sign back in with the same requester
+email that created the request. Reviewer rows show the owner email. Creating a
+throwaway requester creates a separate history and should not show requests
+owned by another requester.
 
 For repeatable requester workflow browser coverage, install the Playwright browser once:
 

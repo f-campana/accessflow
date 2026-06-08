@@ -146,13 +146,31 @@ test("requester can submit a durable study access request", async ({ page }) => 
   await expect(
     page.getByRole("heading", { name: "Study access request" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to an existing requester" })
+  ).toBeVisible();
+  await expect(
+    page.getByText(`seeded requester ${demoRequester.email}`)
+  ).toBeVisible();
+  await expect(
+    page.getByText("Reviewer rows show the requester email that owns each request.")
+  ).toBeVisible();
+  await expect(
+    page.getByText("Creating a throwaway requester starts a separate history.")
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sign in to requester" })
+  ).toHaveClass(/primary-button/);
   await expectNoHorizontalOverflow(page);
 
   const requesterEmail = uniqueRequesterEmail();
 
   await page.getByLabel("Email").fill(requesterEmail);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
-  await page.getByRole("button", { name: "Create new requester" }).click();
+  await page.getByRole("button", { name: "Create throwaway requester" }).click();
+  await expect(
+    page.getByText("Sign in with this same email to return to its requests.")
+  ).toBeVisible();
 
   await expect(
     page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
@@ -283,7 +301,7 @@ test("requester can submit a durable study access request", async ({ page }) => 
   await expect(page.getByText("No active session")).toBeVisible();
   await page.getByLabel("Email").fill(requesterEmail);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in to requester" }).click();
 
   await expect(page.getByText("Signed in with a requester session.")).toBeVisible();
   await expect(page.getByText("submitted", { exact: true })).toBeVisible();
@@ -328,7 +346,7 @@ test("requester can withdraw an under-review request and reviewer sees it", asyn
 
   await page.getByLabel("Email").fill(requesterEmail);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
-  await page.getByRole("button", { name: "Create new requester" }).click();
+  await page.getByRole("button", { name: "Create throwaway requester" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
@@ -434,7 +452,7 @@ test("requester sees rejected final state after reviewer decision", async ({
 
   await expect(page.getByLabel("Email")).toHaveValue(demoRequester.email);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in to requester" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
@@ -489,7 +507,7 @@ test("requester sees rejected final state after reviewer decision", async ({
   await page.goto("/");
   await expect(page.getByLabel("Email")).toHaveValue(demoRequester.email);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in to requester" }).click();
 
   await expect(page.getByText("Signed in with a requester session.")).toBeVisible();
   await expect(page.getByText("rejected", { exact: true })).toBeVisible();
@@ -569,7 +587,7 @@ test("requester conflict refreshes stale submitted state", async ({ page }) => {
   await page.goto("/");
 
   await page.getByLabel("Email").fill(requesterEmail);
-  await page.getByRole("button", { name: "Create new requester" }).click();
+  await page.getByRole("button", { name: "Create throwaway requester" }).click();
   await expect(
     page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
   ).toBeVisible();

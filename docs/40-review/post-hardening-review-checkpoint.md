@@ -103,9 +103,13 @@ Plain summary at this point in the project: reviewers could see submitted reques
 
 Lesson: read surfaces and mutation surfaces should be split. Reviewer reads prove authorization and projection shape first; approve/reject should come later as a separate transactional command pass.
 
-Human-test DX remediation started on 2026-06-04: `db:seed` now creates stable requester/reviewer/admin demo accounts through the real Better Auth credential path, requester login defaults to the seeded requester while "Create new requester" creates a throwaway account, and reviewer login defaults to the seeded reviewer.
+Human-test DX remediation started on 2026-06-04: `db:seed` now creates stable requester/reviewer/admin demo accounts through the real Better Auth credential path, requester login defaults to the seeded requester while creating a throwaway requester creates a separate account, and reviewer login defaults to the seeded reviewer.
 
 Plain summary: local testing no longer depends on random generated emails. Use `requester@example.test`, `reviewer@example.test`, or `admin@example.test` with `development-password`.
+
+Human-test auth ownership clarified on 2026-06-08: the requester login panel now makes existing requester sign-in the primary action, labels new account creation as a throwaway requester, and explains that a tester must sign back in with the same requester email shown in reviewer rows to return to that account's workflow history.
+
+Plain summary: persistence is per requester account. Creating another requester is a new history, not a way to reopen the previous request.
 
 Clean demo reset added on 2026-06-04: `pnpm demo:reset`, `pnpm mobile:preview`, and the Playwright e2e server startup now reset the guarded local preview database before seeding. The intended human-test baseline is one synthetic study, three demo users, no existing access requests, and an empty reviewer workflow list until the current test creates a submitted request.
 
