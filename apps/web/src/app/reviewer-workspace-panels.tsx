@@ -23,7 +23,7 @@ export function ReviewerHeader({
     <header className="topbar">
       <div>
         <p className="eyebrow">AccessFlow</p>
-        <h1>Reviewer queue</h1>
+        <h1>Review workspace</h1>
       </div>
       <div className="session-pill">
         {actor ? (
@@ -119,8 +119,8 @@ export function ReviewerInboxPanel({
     <section className="panel reviewer-inbox" aria-labelledby="reviewer-inbox-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Reviewer inbox</p>
-          <h2 id="reviewer-inbox-title">Requests for review</h2>
+          <p className="eyebrow">Reviewer workspace</p>
+          <h2 id="reviewer-inbox-title">Workflow requests</h2>
         </div>
         <span className="muted">
           {inbox.length} request{inbox.length === 1 ? "" : "s"}
@@ -128,7 +128,7 @@ export function ReviewerInboxPanel({
       </div>
 
       {inbox.length === 0 ? (
-        <p className="empty-state">No requests are waiting for review.</p>
+        <p className="empty-state">No workflow requests yet.</p>
       ) : (
         <ol className="reviewer-list">
           {inbox.map((item) => (

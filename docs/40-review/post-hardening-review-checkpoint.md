@@ -91,13 +91,13 @@ Historical No-Go: do not start reviewer approve/reject mutations until reviewer 
 
 Name: reviewer-read-workflow-start.
 
-Scope: update workflow docs away from XState wording, add reviewer read authorization/projections, add tRPC queries for reviewer inbox/detail, and render a minimal reviewer inbox/detail UI from persisted submitted requests.
+Scope: update workflow docs away from XState wording, add reviewer read authorization/projections, add tRPC queries for reviewer workflow list/detail reads, and render a minimal reviewer workflow list/detail UI from persisted submitted requests.
 
 Non-goals: no approve/reject mutations, no admin console, no documents, no notifications, no organization/tenant model, no generic workflow engine.
 
 ## Follow-Up Progress
 
-Reviewer read workflow start completed on 2026-06-04: product/agent docs now describe the typed transition table instead of XState as the active workflow model; `apps/api` exposes reviewer-only inbox/detail read projections; requester users are forbidden from reviewer reads while reviewer/admin users can inspect submitted requests; `apps/web` has a separate `/reviewer` read-only workspace that does not branch inside the requester controller; Playwright covers requester submit plus reviewer submitted-request inspection without approve/reject controls.
+Reviewer read workflow start completed on 2026-06-04: product/agent docs now describe the typed transition table instead of XState as the active workflow model; `apps/api` exposes reviewer-only workflow list/detail read projections; requester users are forbidden from reviewer reads while reviewer/admin users can inspect submitted requests; `apps/web` has a separate `/reviewer` read-only workspace that does not branch inside the requester controller; Playwright covers requester submit plus reviewer submitted-request inspection without approve/reject controls.
 
 Plain summary at this point in the project: reviewers could see submitted requests and the persisted audit timeline, but they could not yet change workflow state.
 
@@ -107,7 +107,7 @@ Human-test DX remediation started on 2026-06-04: `db:seed` now creates stable re
 
 Plain summary: local testing no longer depends on random generated emails. Use `requester@example.test`, `reviewer@example.test`, or `admin@example.test` with `development-password`.
 
-Clean demo reset added on 2026-06-04: `pnpm demo:reset`, `pnpm mobile:preview`, and the Playwright e2e server startup now reset the guarded local preview database before seeding. The intended human-test baseline is one synthetic study, three demo users, no existing access requests, and an empty reviewer queue until the current test creates a submitted request.
+Clean demo reset added on 2026-06-04: `pnpm demo:reset`, `pnpm mobile:preview`, and the Playwright e2e server startup now reset the guarded local preview database before seeding. The intended human-test baseline is one synthetic study, three demo users, no existing access requests, and an empty reviewer workflow list until the current test creates a submitted request.
 
 Plain summary: phone testing should no longer inherit stale generated studies or old submitted requests from previous sessions.
 

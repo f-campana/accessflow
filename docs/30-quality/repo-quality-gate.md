@@ -98,7 +98,7 @@ For the requester path, verify:
 For the reviewer path, verify:
 
 1. seeded reviewer sign-in
-2. submitted requests appear in the reviewer queue
+2. submitted requests appear in the reviewer workflow list
 3. requester users cannot access reviewer reads or commands
 4. `startReview` moves the selected request to `under_review`
 5. approve/reject controls only appear for `under_review` requests
@@ -142,7 +142,7 @@ Each preview run should start from:
 studies: 1
 users: 3
 study access requests: 0
-reviewer queue: empty until the current test creates a request
+reviewer workflow list: empty until the current test creates a request
 ```
 
 Use this path instead of relying on plain Next dev server behavior when validating the app from an iPhone.

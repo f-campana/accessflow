@@ -15,7 +15,7 @@ export const compactId = (value: string) => value.slice(0, 8);
 export const reviewerOperationStatus = (operation: ReviewerOperation) => {
   switch (operation) {
     case "loadingWorkspace":
-      return "Loading reviewer queue";
+      return "Loading review workspace";
     case "loadingDetail":
       return "Loading request detail";
     case "startingReview":

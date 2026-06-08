@@ -46,7 +46,7 @@ The target product has three roles. The current code implements the requester-fa
 
 Requester: implemented for creating and updating their own access request drafts, submitting requests, withdrawing submitted or under-review requests, reopening rejected requests for edits, and viewing the status and audit timeline for their own requests.
 
-Reviewer: implemented for reading submitted, under-review, approved, rejected, and withdrawn access requests through reviewer inbox/detail projections, starting review, approving requests, rejecting requests with a reason, and viewing the persisted audit timeline. A reviewer should not be able to edit the requester-owned form payload directly.
+Reviewer: implemented for reading submitted, under-review, approved, rejected, and withdrawn access requests through reviewer workflow list/detail projections, starting review, approving requests, rejecting requests with a reason, and viewing the persisted audit timeline. A reviewer should not be able to edit the requester-owned form payload directly.
 
 Admin: roadmap. Admin will inspect all requests and audit events. Admin exists for operational visibility and test coverage, not for a large management console in v1.
 
@@ -268,7 +268,7 @@ Reviewer surfaces:
 
 ```text
 implemented now:
-submitted/under-review/approved/rejected/withdrawn request inbox
+submitted/under-review/approved/rejected/withdrawn workflow request list
 request detail view
 start review action
 approve action
@@ -340,7 +340,7 @@ refresh shows submitted status
 timeline shows persisted events
 requester can withdraw and see the persisted withdrawn state
 requester can reopen a rejected request and edit the draft again
-reviewer sees submitted request in inbox
+reviewer sees submitted request in the workflow request list
 reviewer sees persisted request detail/timeline
 
 roadmap later:

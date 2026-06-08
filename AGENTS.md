@@ -18,7 +18,7 @@ The central product invariant is:
 A workflow transition is successful only when the API transaction persists the new state and writes the audit event.
 ```
 
-Current implementation scope is requester submission/remediation plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, withdraw submitted or under-review requests, reopen rejected requests for edits, requester audit timeline, requester approved/rejected/withdrawn final-state visibility, reviewer inbox/detail reads, start review, approve request, reject request with reason, start/approve/reject idempotency, and reviewer audit timeline reads. Revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
+Current implementation scope is requester submission/remediation plus reviewer decisions: stable seeded demo sign-in, new requester creation, study read, draft create/save, submit, withdraw submitted or under-review requests, reopen rejected requests for edits, requester audit timeline, requester approved/rejected/withdrawn final-state visibility, reviewer workflow list/detail reads, start review, approve request, reject request with reason, start/approve/reject idempotency, and reviewer audit timeline reads. Revocation, admin consoles, uploads, notifications, tenants/orgs, and generic workflow tooling remain out of scope until explicitly requested.
 
 ## Project Shape
 

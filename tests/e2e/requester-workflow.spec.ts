@@ -637,7 +637,7 @@ test("reviewer can reject an under-review request with a durable reason", async 
 
   const requesterEmail = uniqueRequesterEmail();
   const studyName = `Reviewer Study ${Date.now()}`;
-  const purpose = "Inspect submitted workflow evidence in a reviewer queue.";
+  const purpose = "Inspect submitted workflow evidence in a review workspace.";
   const justification = "Reviewer needs to confirm the persisted submission.";
 
   const requester = {
@@ -690,7 +690,7 @@ test("reviewer can reject an under-review request with a durable reason", async 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/reviewer");
 
-  await expect(page.getByRole("heading", { name: "Reviewer queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review workspace" })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -699,7 +699,7 @@ test("reviewer can reject an under-review request with a durable reason", async 
     page.getByText("Signed in with reviewer access.")
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Requests for review" })
+    page.getByRole("heading", { name: "Workflow requests" })
   ).toBeVisible();
 
   const seededRequest = page
@@ -908,7 +908,7 @@ test("reviewer can approve an under-review request", async ({ page }) => {
 
   const requesterEmail = uniqueRequesterEmail();
   const studyName = `Reviewer Approve Study ${Date.now()}`;
-  const purpose = "Approve submitted workflow evidence in a reviewer queue.";
+  const purpose = "Approve submitted workflow evidence in a review workspace.";
   const justification = "Reviewer needs to approve the persisted submission.";
 
   const requester = {
@@ -961,7 +961,7 @@ test("reviewer can approve an under-review request", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/reviewer");
 
-  await expect(page.getByRole("heading", { name: "Reviewer queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review workspace" })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
   await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
   await page.getByRole("button", { name: "Sign in" }).click();

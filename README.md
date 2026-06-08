@@ -25,7 +25,7 @@ Implemented API coverage:
 - tRPC mutations for those commands.
 - tRPC reads for the current actor, study list, and requester study access state.
 - tRPC reviewer reads for submitted, under-review, approved, rejected, and withdrawn
-  request inbox/detail projections.
+  workflow request/detail projections.
 - Requester ownership checks, typed command errors, idempotency replay, and audit
   writes for submit, withdraw, and reopen transitions.
 - Reviewer/admin authorization for reviewer reads and review decisions.
@@ -39,7 +39,7 @@ Implemented web coverage:
   error rendering, persisted status, and audit timeline.
 - Requester visibility for approved/rejected final states after reviewer decisions,
   including decision notes and full persisted audit history.
-- Reviewer queue/detail view for submitted, under-review, approved, rejected, and withdrawn
+- Reviewer workspace/detail view for submitted, under-review, approved, rejected, and withdrawn
   requests, including start-review, approve, reject, decision note, and
   persisted audit timeline.
 

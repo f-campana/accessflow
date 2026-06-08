@@ -813,7 +813,7 @@ Completed 2026-06-08: replaced the separate submit-attempt and lifecycle-attempt
 
 Lesson: idempotent UI retries should have one durable mental model. The command-specific parts are the subject being protected and the statuses that prove the command committed; the mutation shell should not be copied for every button.
 
-### 39. [ ] Clarify Reviewer Queue Versus Workflow History
+### 39. [x] Clarify Reviewer Queue Versus Workflow History
 
 Issue: the reviewer “queue” now lists submitted, under-review, approved, rejected, and withdrawn requests. That is useful as a lightweight history browser, but the label “Requests for review” no longer describes final approved/rejected/withdrawn rows.
 
@@ -828,6 +828,10 @@ Done when:
 - no new admin surface is introduced only to solve naming
 
 Plain summary: if a list contains history, it should not pretend everything in it is still waiting for action.
+
+Completed 2026-06-08: renamed the reviewer page heading from queue language to `Review workspace`, renamed the mixed active/final list to `Workflow requests`, and changed empty/loading copy so it no longer says rows are waiting for review. Updated reviewer e2e assertions and current docs to use the same language while leaving the internal `inbox` implementation names alone for now.
+
+Lesson: copy is part of the domain model users see. A queue implies pending action, while a workflow list can honestly contain both actionable rows and historical final states.
 
 ## Do Not Start Yet
 
