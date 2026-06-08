@@ -19,21 +19,16 @@ import {
   isDraftCommandInFlight
 } from "./requester-draft-edit-lock";
 import {
-  getOrCreateRequesterLifecycleAttempt,
-  reconcileRequesterLifecycleAttempt,
-  type RequesterLifecycleAttempt
-} from "./requester-lifecycle-attempt";
+  getOrCreateRequesterCommandAttempt,
+  isRequesterCommandAttemptConfirmed,
+  reconcileRequesterCommandAttempt,
+  type RequesterCommandAttempt
+} from "./requester-command-attempt";
 import {
   isRequesterOperationActive,
   requesterOperationStatus,
   type RequesterOperation
 } from "./requester-operation-state";
-import {
-  getOrCreateSubmitAttempt,
-  isSubmitAttemptConfirmedSubmitted,
-  reconcileSubmitAttempt,
-  type SubmitAttempt
-} from "./requester-submit-attempt";
 import {
   compactId,
   emptyDraftForm,
@@ -68,6 +63,27 @@ type RequesterWorkspaceControllerStateInput = {
   operation: RequesterOperation;
   selectedStudyId: string;
   studies: Study[];
+};
+
+type RequesterCommandAction = Parameters<typeof commandExceptionError>[0];
+
+type RequesterCommandResponse<TValue> =
+  | {
+      ok: true;
+      value: TValue;
+    }
+  | {
+      error: AppError;
+      ok: false;
+    };
+
+type RunRequesterCommandOptions<TValue> = {
+  action: RequesterCommandAction;
+  isConfirmed?: (nextAccess: StudyAccess) => boolean;
+  mutate: () => Promise<RequesterCommandResponse<TValue>>;
+  notice: (value: TValue) => string;
+  operation: RequesterOperation;
+  studyId: string;
 };
 
 export const createRequesterClientId = createSessionClientId;
@@ -132,9 +148,8 @@ export function useRequesterWorkspaceController({
   const [error, setError] = useState<AppError | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [canRetryRefresh, setCanRetryRefresh] = useState(false);
-  const [submitAttempt, setSubmitAttempt] = useState<SubmitAttempt | null>(null);
-  const [lifecycleAttempt, setLifecycleAttempt] =
-    useState<RequesterLifecycleAttempt | null>(null);
+  const [commandAttempt, setCommandAttempt] =
+    useState<RequesterCommandAttempt | null>(null);
   const selectedStudyIdRef = useRef(selectedStudyId);
   const accessRequestGuardRef = useRef<AsyncRequestGuard | null>(null);
 
@@ -163,11 +178,8 @@ export function useRequesterWorkspaceController({
   const applyStudyAccess = useCallback((nextAccess: StudyAccess) => {
     setAccess(nextAccess);
     setDraftForm(toDraftForm(nextAccess));
-    setSubmitAttempt((currentAttempt) =>
-      reconcileSubmitAttempt(currentAttempt, nextAccess)
-    );
-    setLifecycleAttempt((currentAttempt) =>
-      reconcileRequesterLifecycleAttempt(currentAttempt, nextAccess)
+    setCommandAttempt((currentAttempt) =>
+      reconcileRequesterCommandAttempt(currentAttempt, nextAccess)
     );
   }, []);
 
@@ -186,8 +198,7 @@ export function useRequesterWorkspaceController({
     setAuthError(null);
     setNotice(null);
     setCanRetryRefresh(false);
-    setSubmitAttempt(null);
-    setLifecycleAttempt(null);
+    setCommandAttempt(null);
 
     try {
       const currentActor = await trpcClient.me.query();
@@ -260,8 +271,7 @@ export function useRequesterWorkspaceController({
     setError(null);
     setNotice(null);
     setCanRetryRefresh(false);
-    setSubmitAttempt(null);
-    setLifecycleAttempt(null);
+    setCommandAttempt(null);
 
     try {
       const nextAccess = await trpcClient.myStudyAccess.query({ studyId });
@@ -292,8 +302,7 @@ export function useRequesterWorkspaceController({
     setAuthError(null);
     setNotice(null);
     setCanRetryRefresh(false);
-    setSubmitAttempt(null);
-    setLifecycleAttempt(null);
+    setCommandAttempt(null);
     accessRequestGuard.invalidate();
 
     try {
@@ -333,8 +342,7 @@ export function useRequesterWorkspaceController({
     setError(null);
     setAuthError(null);
     setCanRetryRefresh(false);
-    setSubmitAttempt(null);
-    setLifecycleAttempt(null);
+    setCommandAttempt(null);
     accessRequestGuard.invalidate();
 
     try {
@@ -417,6 +425,50 @@ export function useRequesterWorkspaceController({
     }
   };
 
+  const runRequesterCommand = async <TValue,>({
+    action,
+    isConfirmed,
+    mutate,
+    notice: commandNotice,
+    operation: nextOperation,
+    studyId
+  }: RunRequesterCommandOptions<TValue>) => {
+    setOperation(nextOperation);
+    setError(null);
+    setNotice(null);
+    setCanRetryRefresh(false);
+
+    try {
+      const response = await mutate();
+
+      if (!response.ok) {
+        if (selectedStudyIdRef.current !== studyId) {
+          return;
+        }
+
+        await refreshAfterCommandError(studyId, response.error);
+        return;
+      }
+
+      await refreshAfterCommand(
+        studyId,
+        commandReloadError(action),
+        commandNotice(response.value),
+        isConfirmed
+      );
+    } catch {
+      if (selectedStudyIdRef.current !== studyId) {
+        return;
+      }
+
+      setError(commandExceptionError(action));
+    } finally {
+      if (selectedStudyIdRef.current === studyId) {
+        setOperation("idle");
+      }
+    }
+  };
+
   const retrySelectedStudyRefresh = async () => {
     const studyId = selectedStudyIdRef.current;
 
@@ -458,41 +510,16 @@ export function useRequesterWorkspaceController({
       return;
     }
 
-    setOperation("creatingDraft");
-    setError(null);
-    setNotice(null);
-    setCanRetryRefresh(false);
-
-    try {
-      const response = await trpcClient.createDraft.mutate({
-        studyId
-      });
-
-      if (!response.ok) {
-        if (selectedStudyIdRef.current !== studyId) {
-          return;
-        }
-
-        await refreshAfterCommandError(studyId, response.error);
-        return;
-      }
-
-      await refreshAfterCommand(
-        studyId,
-        commandReloadError("createDraft"),
-        `Draft ${compactId(response.value.draftId)} created.`
-      );
-    } catch {
-      if (selectedStudyIdRef.current !== studyId) {
-        return;
-      }
-
-      setError(commandExceptionError("createDraft"));
-    } finally {
-      if (selectedStudyIdRef.current === studyId) {
-        setOperation("idle");
-      }
-    }
+    await runRequesterCommand({
+      action: "createDraft",
+      mutate: () =>
+        trpcClient.createDraft.mutate({
+          studyId
+        }),
+      notice: (value) => `Draft ${compactId(value.draftId)} created.`,
+      operation: "creatingDraft",
+      studyId
+    });
   };
 
   const saveDraft = async () => {
@@ -503,43 +530,18 @@ export function useRequesterWorkspaceController({
       return;
     }
 
-    setOperation("savingDraft");
-    setError(null);
-    setNotice(null);
-    setCanRetryRefresh(false);
-
-    try {
-      const response = await trpcClient.saveDraft.mutate({
-        draftId,
-        ...draftForm,
-        requestedRole: draftForm.requestedRole || null
-      });
-
-      if (!response.ok) {
-        if (selectedStudyIdRef.current !== studyId) {
-          return;
-        }
-
-        await refreshAfterCommandError(studyId, response.error);
-        return;
-      }
-
-      await refreshAfterCommand(
-        studyId,
-        commandReloadError("saveDraft"),
-        `Draft ${compactId(response.value.draftId)} saved.`
-      );
-    } catch {
-      if (selectedStudyIdRef.current !== studyId) {
-        return;
-      }
-
-      setError(commandExceptionError("saveDraft"));
-    } finally {
-      if (selectedStudyIdRef.current === studyId) {
-        setOperation("idle");
-      }
-    }
+    await runRequesterCommand({
+      action: "saveDraft",
+      mutate: () =>
+        trpcClient.saveDraft.mutate({
+          draftId,
+          ...draftForm,
+          requestedRole: draftForm.requestedRole || null
+        }),
+      notice: (value) => `Draft ${compactId(value.draftId)} saved.`,
+      operation: "savingDraft",
+      studyId
+    });
   };
 
   const submitRequest = async () => {
@@ -550,53 +552,32 @@ export function useRequesterWorkspaceController({
       return;
     }
 
-    setOperation("submittingRequest");
-    setError(null);
-    setNotice(null);
-    setCanRetryRefresh(false);
-
-    const nextSubmitAttempt = getOrCreateSubmitAttempt(
-      submitAttempt,
-      draftId,
+    const nextAttempt = getOrCreateRequesterCommandAttempt(
+      commandAttempt,
+      {
+        commandName: "submitRequest",
+        subjectId: draftId
+      },
       createClientId
     );
-    setSubmitAttempt(nextSubmitAttempt);
+    setCommandAttempt(nextAttempt);
 
-    try {
-      const response = await trpcClient.submitRequest.mutate({
-        draftId,
-        idempotencyKey: nextSubmitAttempt.idempotencyKey,
-        ...draftForm,
-        requestedRole: draftForm.requestedRole || null
-      });
-
-      if (!response.ok) {
-        if (selectedStudyIdRef.current !== studyId) {
-          return;
-        }
-
-        await refreshAfterCommandError(studyId, response.error);
-        return;
-      }
-
-      await refreshAfterCommand(
-        studyId,
-        commandReloadError("submitRequest"),
-        `Request ${compactId(response.value.requestId)} submitted.`,
-        (nextAccess) =>
-          isSubmitAttemptConfirmedSubmitted(nextSubmitAttempt, nextAccess)
-      );
-    } catch {
-      if (selectedStudyIdRef.current !== studyId) {
-        return;
-      }
-
-      setError(commandExceptionError("submitRequest"));
-    } finally {
-      if (selectedStudyIdRef.current === studyId) {
-        setOperation("idle");
-      }
-    }
+    await runRequesterCommand({
+      action: "submitRequest",
+      isConfirmed: (nextAccess) =>
+        isRequesterCommandAttemptConfirmed(nextAttempt, nextAccess),
+      mutate: () =>
+        trpcClient.submitRequest.mutate({
+          draftId,
+          idempotencyKey: nextAttempt.idempotencyKey,
+          ...draftForm,
+          requestedRole: draftForm.requestedRole || null
+        }),
+      notice: (value) =>
+        `Request ${compactId(value.requestId)} submitted.`,
+      operation: "submittingRequest",
+      studyId
+    });
   };
 
   const withdrawRequest = async () => {
@@ -607,55 +588,30 @@ export function useRequesterWorkspaceController({
       return;
     }
 
-    setOperation("withdrawingRequest");
-    setError(null);
-    setNotice(null);
-    setCanRetryRefresh(false);
-
-    const nextAttempt = getOrCreateRequesterLifecycleAttempt(
-      lifecycleAttempt,
+    const nextAttempt = getOrCreateRequesterCommandAttempt(
+      commandAttempt,
       {
         commandName: "withdrawRequest",
-        requestId
+        subjectId: requestId
       },
       createClientId
     );
-    setLifecycleAttempt(nextAttempt);
+    setCommandAttempt(nextAttempt);
 
-    try {
-      const response = await trpcClient.withdrawRequest.mutate({
-        requestId,
-        idempotencyKey: nextAttempt.idempotencyKey
-      });
-
-      if (!response.ok) {
-        if (selectedStudyIdRef.current !== studyId) {
-          return;
-        }
-
-        await refreshAfterCommandError(studyId, response.error);
-        return;
-      }
-
-      await refreshAfterCommand(
-        studyId,
-        commandReloadError("withdrawRequest"),
-        `Request ${compactId(response.value.requestId)} withdrawn.`,
-        (nextAccess) =>
-          nextAccess?.request.id === requestId &&
-          nextAccess.request.status === "withdrawn"
-      );
-    } catch {
-      if (selectedStudyIdRef.current !== studyId) {
-        return;
-      }
-
-      setError(commandExceptionError("withdrawRequest"));
-    } finally {
-      if (selectedStudyIdRef.current === studyId) {
-        setOperation("idle");
-      }
-    }
+    await runRequesterCommand({
+      action: "withdrawRequest",
+      isConfirmed: (nextAccess) =>
+        isRequesterCommandAttemptConfirmed(nextAttempt, nextAccess),
+      mutate: () =>
+        trpcClient.withdrawRequest.mutate({
+          requestId,
+          idempotencyKey: nextAttempt.idempotencyKey
+        }),
+      notice: (value) =>
+        `Request ${compactId(value.requestId)} withdrawn.`,
+      operation: "withdrawingRequest",
+      studyId
+    });
   };
 
   const reopenRejectedRequest = async () => {
@@ -666,55 +622,30 @@ export function useRequesterWorkspaceController({
       return;
     }
 
-    setOperation("reopeningRequest");
-    setError(null);
-    setNotice(null);
-    setCanRetryRefresh(false);
-
-    const nextAttempt = getOrCreateRequesterLifecycleAttempt(
-      lifecycleAttempt,
+    const nextAttempt = getOrCreateRequesterCommandAttempt(
+      commandAttempt,
       {
         commandName: "reopenRequest",
-        requestId
+        subjectId: requestId
       },
       createClientId
     );
-    setLifecycleAttempt(nextAttempt);
+    setCommandAttempt(nextAttempt);
 
-    try {
-      const response = await trpcClient.reopenRequest.mutate({
-        requestId,
-        idempotencyKey: nextAttempt.idempotencyKey
-      });
-
-      if (!response.ok) {
-        if (selectedStudyIdRef.current !== studyId) {
-          return;
-        }
-
-        await refreshAfterCommandError(studyId, response.error);
-        return;
-      }
-
-      await refreshAfterCommand(
-        studyId,
-        commandReloadError("reopenRequest"),
-        `Request ${compactId(response.value.requestId)} reopened for edits.`,
-        (nextAccess) =>
-          nextAccess?.request.id === requestId &&
-          nextAccess.request.status === "draft"
-      );
-    } catch {
-      if (selectedStudyIdRef.current !== studyId) {
-        return;
-      }
-
-      setError(commandExceptionError("reopenRequest"));
-    } finally {
-      if (selectedStudyIdRef.current === studyId) {
-        setOperation("idle");
-      }
-    }
+    await runRequesterCommand({
+      action: "reopenRequest",
+      isConfirmed: (nextAccess) =>
+        isRequesterCommandAttemptConfirmed(nextAttempt, nextAccess),
+      mutate: () =>
+        trpcClient.reopenRequest.mutate({
+          requestId,
+          idempotencyKey: nextAttempt.idempotencyKey
+        }),
+      notice: (value) =>
+        `Request ${compactId(value.requestId)} reopened for edits.`,
+      operation: "reopeningRequest",
+      studyId
+    });
   };
 
   const updateDraft = (field: keyof DraftForm, value: string) => {

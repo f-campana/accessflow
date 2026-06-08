@@ -792,7 +792,7 @@ Completed 2026-06-08: extended the mobile Playwright workflow to cover a persist
 
 Lesson: rendered tests should check both user-facing copy and durable workflow evidence. Human labels can be friendly while audit transitions remain machine-shaped, so tests should assert each surface on its own terms.
 
-### 38. [ ] Reduce Requester Command Attempt Duplication Before More Requester Commands
+### 38. [x] Reduce Requester Command Attempt Duplication Before More Requester Commands
 
 Issue: the requester controller now has separate submit and lifecycle attempt models, separate reconciliation paths, and repeated mutate-refresh-confirm-finally code. This is acceptable for the current slice, but it will become harder to reason about if more requester commands are added.
 
@@ -808,6 +808,10 @@ Done when:
 - existing requester tests still cover idempotency-key reuse and clearing
 
 Plain summary: one retry model is easier to trust than separate retry models that all do almost the same thing.
+
+Completed 2026-06-08: replaced the separate submit-attempt and lifecycle-attempt helpers with one typed requester command-attempt model keyed by command name, subject id, subject kind, idempotency key, and confirmed target statuses. The requester controller now stores one command attempt, reconciles it through one path after access refreshes, and runs create/save/submit/withdraw/reopen through one command execution helper for operation state, command errors, refresh, confirmation, and cleanup. Existing submit, withdraw, and reopen idempotency-key reuse and clearing behavior is preserved by the new unified tests.
+
+Lesson: idempotent UI retries should have one durable mental model. The command-specific parts are the subject being protected and the statuses that prove the command committed; the mutation shell should not be copied for every button.
 
 ### 39. [ ] Clarify Reviewer Queue Versus Workflow History
 
