@@ -639,6 +639,9 @@ export function AuditTimelinePanel({ access }: AuditTimelinePanelProps) {
                 <span>
                   {event.fromStatus} to {event.toStatus}
                 </span>
+                {event.note ? (
+                  <p className="timeline-note">Note: {event.note}</p>
+                ) : null}
                 <time dateTime={event.createdAt}>{event.createdAt}</time>
               </div>
             </li>

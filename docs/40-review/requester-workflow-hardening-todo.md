@@ -750,7 +750,7 @@ Verification passed: `pnpm --filter @accessflow/web test`, `pnpm exec playwright
 
 Lesson: a typed command error is not only a message. For stale workflow actions, it is also a signal to reload server truth before the user can keep acting on the old screen.
 
-### 36. [ ] Render Decision Notes In Audit Timelines
+### 36. [x] Render Decision Notes In Audit Timelines
 
 Issue: reopening a rejected request clears the current request `decisionNote`, which is correct for the new draft state, but the timeline UI only renders event type, status transition, and timestamp. The original rejection reason remains in the audit event note, but the user no longer sees it after reopening.
 
@@ -766,6 +766,10 @@ Done when:
 - web tests cover the note after reopen
 
 Plain summary: reopening should make the form editable again, but it should not erase the reviewer’s reason from the visible history.
+
+Completed 2026-06-08: requester and reviewer audit timelines now render event notes when present, so a rejected request shows the reviewer reason on the durable `rejectRequest` event. Reopening still clears the current request-level `decisionNote`, but the requester timeline keeps the historical rejection note visible for edits. Focused e2e coverage now checks the reviewer timeline on rejection and the requester timeline after reopen.
+
+Lesson: current row metadata can change when a workflow reopens, but audit event notes are historical context and should remain visible wherever the timeline is shown.
 
 ### 37. [ ] Align Rendered Coverage With Withdrawal And Reopen Semantics
 

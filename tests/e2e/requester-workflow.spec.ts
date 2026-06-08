@@ -373,6 +373,9 @@ test("requester sees rejected final state after reviewer decision", async ({
   await expect(
     page.getByLabel("Request record").getByText("rejected", { exact: true })
   ).toBeVisible();
+  await expect(
+    page.locator(".timeline-panel").getByText(`Note: ${rejectionReason}`)
+  ).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByText("No active reviewer session")).toBeVisible();
 
@@ -385,11 +388,16 @@ test("requester sees rejected final state after reviewer decision", async ({
   await expect(page.getByText("rejected", { exact: true })).toBeVisible();
   await expect(page.getByText(/Rejected at .+/)).toBeVisible();
   await expect(page.getByText("Decision note:")).toBeVisible();
-  await expect(page.getByText(rejectionReason)).toBeVisible();
+  await expect(
+    page.locator(".submitted-note").filter({ hasText: rejectionReason })
+  ).toBeVisible();
   await expect(page.getByText("submitRequest")).toBeVisible();
   await expect(page.getByText("startReview")).toBeVisible();
   await expect(page.getByText("rejectRequest")).toBeVisible();
   await expect(page.getByText("under_review to rejected")).toBeVisible();
+  await expect(
+    page.locator(".timeline-panel").getByText(`Note: ${rejectionReason}`)
+  ).toBeVisible();
   await expect(page.getByLabel("Purpose")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Submit request" })).toBeDisabled();
@@ -402,6 +410,10 @@ test("requester sees rejected final state after reviewer decision", async ({
   await expect(page.getByText("draft", { exact: true })).toBeVisible();
   await expect(page.getByText("reopenRequest")).toBeVisible();
   await expect(page.getByText("rejected to draft")).toBeVisible();
+  await expect(page.getByText("Decision note:")).toHaveCount(0);
+  await expect(
+    page.locator(".timeline-panel").getByText(`Note: ${rejectionReason}`)
+  ).toBeVisible();
   await expect(page.getByLabel("Purpose")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Submit request" })).toBeEnabled();
@@ -631,9 +643,14 @@ test("reviewer can reject an under-review request with a durable reason", async 
     page.getByLabel("Request record").getByText("rejected", { exact: true })
   ).toBeVisible();
   await expect(page.getByText("Decision note")).toBeVisible();
-  await expect(page.getByText(rejectionReason)).toBeVisible();
+  await expect(
+    page.locator(".field-list").getByText(rejectionReason, { exact: true })
+  ).toBeVisible();
   await expect(page.getByText("rejectRequest")).toBeVisible();
   await expect(page.getByText("under_review to rejected")).toBeVisible();
+  await expect(
+    page.locator(".timeline-panel").getByText(`Note: ${rejectionReason}`)
+  ).toBeVisible();
   await expect(page.getByText(/Request rejected at .+\./)).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve request" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
