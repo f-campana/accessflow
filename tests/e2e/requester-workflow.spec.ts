@@ -307,6 +307,113 @@ test("requester can submit a durable study access request", async ({ page }) => 
   expect(consoleMessages).toEqual([]);
 });
 
+test("requester can withdraw an under-review request and reviewer sees it", async ({
+  page
+}) => {
+  const consoleMessages: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleMessages.push(`pageerror: ${error.message}`);
+  });
+
+  const requesterEmail = uniqueRequesterEmail();
+  const reviewer = await findSeededActor(demoReviewer.email, "reviewer");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByLabel("Email").fill(requesterEmail);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Create new requester" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Aurora Cardiometabolic Study" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Create request draft" }).click();
+
+  await expect(page.getByText(/Draft .+ created\./)).toBeVisible();
+  await page
+    .getByLabel("Purpose")
+    .fill("Verify under-review requester withdrawal.");
+  await page.getByLabel("Requested role").selectOption("viewer");
+  await page
+    .getByLabel("Justification")
+    .fill("Requester should be able to withdraw while review is in progress.");
+  await page.getByLabel("Affiliation").fill("AccessFlow E2E");
+  await page
+    .getByLabel("Supporting notes")
+    .fill("Rendered coverage for under-review withdrawal.");
+  await page.getByRole("button", { name: "Submit request" }).click();
+
+  await expect(page.getByText(/Request .+ submitted\./)).toBeVisible();
+  await expect(page.getByText("submitted", { exact: true })).toBeVisible();
+
+  const requester = await findSeededActor(requesterEmail, "requester");
+  const request = await findLatestRequesterRequest(requester.id);
+  const started = await startReview(reviewer, {
+    requestId: request.id,
+    idempotencyKey: `under-review-withdraw-${crypto.randomUUID()}`
+  });
+
+  if (!started.ok) {
+    throw new Error(started.error.message);
+  }
+
+  await page.reload();
+
+  await expect(page.getByText("under review", { exact: true })).toBeVisible();
+  await expect(page.getByText("startReview")).toBeVisible();
+  await expect(page.getByText("submitted to under_review")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw request" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Withdraw request" }).click();
+
+  await expect(page.getByText(/Request .+ withdrawn\./)).toBeVisible();
+  await expect(page.getByText("withdrawn", { exact: true })).toBeVisible();
+  await expect(page.getByText("withdrawRequest")).toBeVisible();
+  await expect(page.getByText("under_review to withdrawn")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw request" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create new request draft" })
+  ).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByText("No active session")).toBeVisible();
+
+  await page.goto("/reviewer");
+  await expect(page.getByLabel("Email")).toHaveValue(demoReviewer.email);
+  await expect(page.getByLabel("Password")).toHaveValue(demoAuthPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const withdrawnRequest = page
+    .getByRole("button")
+    .filter({ hasText: "Aurora Cardiometabolic Study" })
+    .filter({ hasText: requesterEmail });
+
+  await expect(withdrawnRequest).toBeVisible();
+  await withdrawnRequest.click();
+  await expect(
+    page.getByLabel("Request record").getByText("withdrawn", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("Request withdrawn by requester.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject request" })).toHaveCount(0);
+  await expect(page.getByText("submitRequest")).toBeVisible();
+  await expect(page.getByText("startReview")).toBeVisible();
+  await expect(page.getByText("withdrawRequest")).toBeVisible();
+  await expect(page.getByText("under_review to withdrawn")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  expect(consoleMessages).toEqual([]);
+});
+
 test("requester sees rejected final state after reviewer decision", async ({
   page
 }) => {
@@ -417,6 +524,28 @@ test("requester sees rejected final state after reviewer decision", async ({
   await expect(page.getByLabel("Purpose")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Submit request" })).toBeEnabled();
+  await expectNoHorizontalOverflow(page);
+
+  const updatedPurpose = "Reopened draft with corrected access purpose.";
+  await page.getByLabel("Purpose").fill(updatedPurpose);
+  await page
+    .getByLabel("Justification")
+    .fill("The corrected request narrows the study access scope.");
+  await page.getByRole("button", { name: "Save draft" }).click();
+
+  await expect(page.getByText(/Draft .+ saved\./)).toBeVisible();
+
+  await page.reload();
+
+  await expect(page.getByText("draft", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Purpose")).toHaveValue(updatedPurpose);
+  await expect(page.getByLabel("Purpose")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Submit request" })).toBeEnabled();
+  await expect(page.getByText("Decision note:")).toHaveCount(0);
+  await expect(
+    page.locator(".timeline-panel").getByText(`Note: ${rejectionReason}`)
+  ).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   expect(consoleMessages).toEqual([]);

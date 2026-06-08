@@ -771,7 +771,7 @@ Completed 2026-06-08: requester and reviewer audit timelines now render event no
 
 Lesson: current row metadata can change when a workflow reopens, but audit event notes are historical context and should remain visible wherever the timeline is shown.
 
-### 37. [ ] Align Rendered Coverage With Withdrawal And Reopen Semantics
+### 37. [x] Align Rendered Coverage With Withdrawal And Reopen Semantics
 
 Issue: API tests cover under-review withdrawal, and e2e covers submitted withdrawal plus rejected reopen. The rendered gate does not yet exercise under-review withdrawal, reviewer withdrawn final-state UI, or editing/saving after reopen.
 
@@ -787,6 +787,10 @@ Done when:
 - no console warnings/errors and no horizontal overflow are asserted
 
 Plain summary: the browser should prove the same things the API already proves for these user-visible states.
+
+Completed 2026-06-08: extended the mobile Playwright workflow to cover a persisted `under_review -> withdrawn` requester withdrawal, reviewer visibility of the withdrawn final state with all review controls hidden, and edit/save persistence after reopening a rejected request. No product code change was needed; the only test correction was to assert the UI's human status label `under review` separately from the machine transition text `submitted to under_review`.
+
+Lesson: rendered tests should check both user-facing copy and durable workflow evidence. Human labels can be friendly while audit transitions remain machine-shaped, so tests should assert each surface on its own terms.
 
 ### 38. [ ] Reduce Requester Command Attempt Duplication Before More Requester Commands
 
